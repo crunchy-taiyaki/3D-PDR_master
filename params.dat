@@ -1,0 +1,46 @@
+===========================|********VERSION 1.0********
+3DPDR input parameters file|    ~~~ COMMENTS ~~~
+===========================|-------------------------
+./model                    !Input directory (20 char. max.)
+sphere.dat                 !Input file (20 char. max.)
+./res/sphere_plane_turb20  !Output directory (20 char. max.)
+	     		   !Output file (20 char. max)
+0			   !HEALPix level of refinement
+0.8			   !Theta critical (0<phi<pi/2)
+8			   !First set of Chemical Iterations
+6000			   !Total iteration
+0.9			   !min number density (cm^-3)
+1e12	 	 	   !max number density (cm^-3)
+1.3E-17 		   !Cosmic Rays (s^-1)
+20.0     		   !Turbulent velocity (km/s)
+20.0			   !Dust temperature (K)
+1e7			   !End time (yr)
+100.0			   !Gas-to-dust
+1.0			   !Metallicity
+0.42			   !Omega
+1.0E-7			   !Grain radius (m)
+===========================|
+Input files for molecules  |*** 20 characters max ***
+===========================|
+12co.dat		   !CO
+12c+.dat		   !CII
+12c.dat  		   !CI
+16o.dat  		   !OI
+===========================|
+Thermal balance values     |
+===========================|
+10.0			   !Initial temperature (used when TEMP_GUESS is OFF) [was equal 10.0]
+2.7			   !Tlow (used when TEMP_GUESS is OFF)
+8000.0			   !Thigh (used when TEMP_GUESS is OFF)
+10.0			   !Tmin (absolute lower bound) 
+30000.0			   !Tmax (absolute upper bound)
+0.005			   !Fcrit (% Accuracy)
+0.01			   !Tdiff (maximum temperature difference)
+===========================| 
+UV field		   |
+===========================| 
+UNI			   !ISO-tropic, UNI-directional, PNT-point source
+1.0E5	 		   !G0 (in Draine field units) -x to +x in 1D
+-10.0                      !UV source x-axis coordinate
+0.0                        !UV source y-axis coordinate
+0.0                        !UV source z-axis coordinate
