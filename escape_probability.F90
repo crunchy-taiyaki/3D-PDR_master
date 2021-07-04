@@ -273,8 +273,8 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
            enddo !i=1,jr(j)
 
          else
-           i=1
-           delta_vel = abs(vel_evalpoint(j,i)-v_gas)*1d5
+           
+           !delta_vel = abs(vel_evalpoint(j,i)-v_gas)*1d5
            thermal_vel=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
 
            do i=1,s_jjr(j)
@@ -284,6 +284,8 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
            rhs2=sqrt((s_evalpoint(1,j,i-1)-s_evalpoint(1,j,i))**2+&
               &(s_evalpoint(2,j,i-1)-s_evalpoint(2,j,i))**2+&
               &(s_evalpoint(3,j,i-1)-s_evalpoint(3,j,i))**2) !adaptive step
+           delta_vel = abs(vel_evalpoint(j,i)-vel_evalpoint(j,0))*1d5
+           !tau_increment = frac1*frac3*rhs2*PC/delta_vel
            if (delta_vel.lt.thermal_vel) then
 	     tau_increment = frac1*frac2*frac3*rhs2*PC
            else

@@ -149,7 +149,7 @@ write(6,*) 'Proceeding for the PDR (SERIAL)...'
 #ifdef OPENMP
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(origin, p, ra, rb, ep) &
 !$OMP PRIVATE(i, rvec, theta, phi, ipix, ktot, radius) &
-!$OMP PRIVATE(j, healpixvector, angle_los, id, killray) REDUCTION (+ : kk)
+!$OMP PRIVATE(j, healpixvector, angle_los, id, killray,psi_x,psi_z ) REDUCTION (+ : kk)
 #endif 
 
 do p=1,pdr_ptot

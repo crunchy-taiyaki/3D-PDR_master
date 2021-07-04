@@ -26,10 +26,10 @@
       REAL(KIND=DP)     :: D(1:NREAC),DTOT
 
 !     Specify the number of species to examine and their names
-      INTEGER(KIND=I4B), SAVE :: NLIST=4
-      CHARACTER(LEN=10), SAVE :: SPECLIST(1:4)=&
+      INTEGER(KIND=I4B), SAVE :: NLIST=5
+      CHARACTER(LEN=10), SAVE :: SPECLIST(1:5)=&
      &      (/"C+        ","C         ","O         ",&
-     & "CO        "/)
+     & "CO        ","OH        "/)
       integer::pl
 
       WRITE(12,6) !here was unit=98

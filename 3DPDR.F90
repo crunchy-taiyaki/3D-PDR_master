@@ -174,7 +174,7 @@ open(unit=2,file=input_file,status='old')
 do p=1,grand_ptot
     if (velocity_flag .eq. 'y') then
       read(2,*) xpos,ypos,zpos,denst,radial_velocity
-      radial_velocity = radial_velocity
+      !radial_velocity = radial_velocity
     else
       read(2,*) xpos,ypos,zpos,denst 
       radial_velocity = 0.
@@ -211,6 +211,9 @@ do p=1,grand_ptot
       pdr(p)%velocity = radial_velocity
       IDlist_dark(dark_ptot)=p
     endif
+enddo
+do p=1,grand_ptot
+  write(6,*) pdr(p)%x,pdr(p)%y,pdr(p)%z,pdr(p)%rho,pdr(p)%velocity
 enddo
 write(6,*) 'PDR elements       = ',pdr_ptot
 write(6,*) 'IONIZED elements   = ',ion_ptot

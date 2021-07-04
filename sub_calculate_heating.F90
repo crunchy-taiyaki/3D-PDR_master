@@ -212,7 +212,8 @@
 !     L_TURB = turbulent scale length (pc); typically 5 pc
 !-----------------------------------------------------------------------
 
-      L_TURB=5.0D0
+      L_TURB=200.0D0!5.0D0 
+      !TURBULENT_HEATING=3.5D-28*((1.0D0/1.0D5)**3)*(1.0D0/L_TURB)*DENSITY
       TURBULENT_HEATING=3.5D-28*((V_TURB/1.0D5)**3)*(1.0D0/L_TURB)*DENSITY
 
 !-----------------------------------------------------------------------
