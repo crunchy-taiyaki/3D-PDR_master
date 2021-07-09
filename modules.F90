@@ -187,6 +187,7 @@ MODULE maincode_module
      integer(kind=i4b), pointer :: projected(:,:)  !ID of projected grid points in the line of sight
      integer(kind=i4b), pointer :: raytype(:)      !raytype
      real(kind=dp), pointer :: epoint(:,:,:)       !co-ordinates of each evaluation point
+     real(kind=dp), pointer :: velocity(:,:)     !projected velocity of each evaluation point
      real(kind=dp), pointer :: columndensity(:)    !column density
      real(kind=dp), pointer :: AV(:)               !AV
      real(kind=dp), pointer :: rad_surface(:)      !rad_surface
@@ -216,7 +217,7 @@ MODULE maincode_module
      real(kind=dp) :: rho                          !density of element
      real(kind=dp) :: smoo                         !smoothing length (if SPH = .TRUE. in params.dat)
      real(kind=dp) :: x,y,z                        !position of element
-     real(kind=dp) :: velocity			   !radial velocity of element
+     real(kind=dp) :: vx,vy,vz                     !velocity projections of element 
      real(kind=dp) :: gas_temperature              !current gas temperature of element
      integer(kind=i4b) :: etype                    !element type (1 = PDR, 2 = ION, 3 = DARK)
 #ifdef DUST2
@@ -233,7 +234,6 @@ MODULE maincode_module
   real(kind=dp), allocatable :: OIevalpop(:,:,:)
   real(kind=dp), allocatable :: C12Oevalpop(:,:,:)
   real(kind=dp), allocatable :: eval_temp(:,:) !tempterature in evaluation points
-  real(kind=dp), allocatable :: eval_vel(:,:) !velocity in evaluation points
   real(kind=dp), allocatable :: lines_escape_probability(:,:)
   real(kind=dp), allocatable :: lines_tau(:,:)
 
@@ -296,7 +296,7 @@ integer(kind=i4b) :: pdr_ptot,ion_ptot,dark_ptot
 integer(kind=i4b),allocatable :: IDlist_pdr(:),IDlist_ion(:),IDlist_dark(:)
 real(kind=DP), allocatable :: pdrpoint(:,:)      ! coordinates of pdr element 
 integer(kind=i4b) :: pp
-real(kind=dp) :: xpos,ypos,zpos,denst,radial_velocity
+real(kind=dp) :: xpos,ypos,zpos,denst,xvel,yvel,zvel
 !================================
 !================================
 !================================
@@ -398,6 +398,8 @@ module global_module
 
 ! REAL(kind=dp), save :: ZETA=3.85D0,OMEGA=0.42D0,GRAIN_RADIUS=1.0D-5,METALLICITY=1.0D0
  REAL(kind=dp) :: g2d
+ REAL(kind=dp) :: g2d_outflow
+ REAL(kind=dp) :: max_velocity
  REAL(kind=dp) :: metallicity
  REAL(kind=dp) :: omega
  REAL(kind=dp) :: grain_radius
@@ -505,23 +507,25 @@ module functions_module
      real(kind=dp) :: NCO, NH2
    end function LBAR
 
-    function calculate_heating(density, gas_temperature, dust_temperature, UV_field, &
+    function calculate_heating(inside_outflow, density, gas_temperature, dust_temperature, UV_field, &
              & v_turb, nspec, dummyabundance, nreac, rate)
       use definitions
       use healpix_types
       real(kind=dp) :: calculate_heating
       integer(kind=i4b) :: nspec, nreac
+      logical, intent(in) :: inside_outflow
       real(kind=dp) :: density, gas_temperature, dust_temperature, UV_field, v_turb
       real(kind=dp) :: dummyabundance(1:nspec), rate(1:nreac)
     end function calculate_heating
 
 #ifdef H2FORM
 
-      FUNCTION H2_FORMATION_RATE(GAS_TEMPERATURE,GRAIN_TEMPERATURE) RESULT(RATE)
+      FUNCTION H2_FORMATION_RATE(inside_outflow,GAS_TEMPERATURE,GRAIN_TEMPERATURE) RESULT(RATE)
          USE DEFINITIONS
          USE HEALPIX_TYPES
          IMPLICIT NONE
          REAL(KIND=DP) :: RATE
+         logical, intent(in) :: inside_outflow
          REAL(KIND=DP), INTENT(IN) :: GAS_TEMPERATURE,GRAIN_TEMPERATURE
       END FUNCTION H2_FORMATION_RATE
 

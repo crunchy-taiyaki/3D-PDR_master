@@ -13,7 +13,8 @@ double precision::adaptivemin
 logical::killray(0:nrays-1)
 integer::j
 real(kind=dp) :: psi_z, psi_x !angles of rotations for matching UV-source's direction and healpix ray with coordinates (0 1 0)
-real(kind=dp) :: test(1:3)
+real(kind=dp) :: vel_vec(1:3),temp_vec(1:3)
+real(kind=dp) :: test_angle,test_angle2, test_module, test_module2
 
 if (dark_ptot.gt.0) then
 
@@ -76,9 +77,20 @@ do k=1,ktot
    rvec(2)=pdr(rb(k))%y-origin(2)
    rvec(3)=pdr(rb(k))%z-origin(3)
 
+   vel_vec(1) = pdr(rb(k))%vx
+   vel_vec(2) = pdr(rb(k))%vy
+   vel_vec(3) = pdr(rb(k))%vz
+
 IF (fieldchoice.EQ."PNT") THEN
+   temp_vec = rvec + vel_vec
+
+   call rotate_z(temp_vec(1),temp_vec(2),temp_vec(3),psi_z)
+   call rotate_x(temp_vec(1),temp_vec(2),temp_vec(3),psi_x)
+
    call rotate_z(rvec(1),rvec(2),rvec(3),psi_z)
    call rotate_x(rvec(1),rvec(2),rvec(3),psi_x)
+
+   vel_vec = temp_vec - rvec   
 ENDIF
 
    !next two lines return the ipix ray that the rvec(1:3) point belongs to.
@@ -122,6 +134,9 @@ ENDIF
     pdr(IDlist_dark(1))%epray(ipix) = pdr(IDlist_dark(1))%epray(ipix)+1
     id = pdr(IDlist_dark(1))%epray(ipix)
     if (pdr(IDlist_dark(1))%epray(ipix).gt.maxpoints) STOP 'Increase maxpoints!'
+
+    call project(vel_vec,healpixvector,pdr(IDlist_dark(1))%velocity(ipix,id) )
+
     pdr(IDlist_dark(1))%epoint(1:3,ipix,id)=ep(1:3,ipix)+origin(1:3)
     pdr(IDlist_dark(1))%projected(ipix,id)=rb(k)
     if (pdr(rb(k))%etype.eq.2) killray(ipix)=.true. !if the projected is ionized, stop propagating the ray (it has hit the HII region)
@@ -148,7 +163,7 @@ write(6,*) 'Proceeding for the PDR (SERIAL)...'
 !PARALLEL PROCESS-----------------------------
 #ifdef OPENMP
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(origin, p, ra, rb, ep) &
-!$OMP PRIVATE(i, rvec, theta, phi, ipix, ktot, radius) &
+!$OMP PRIVATE(i, rvec, vel_vec, temp_vec, theta, phi, ipix, ktot, radius) &
 !$OMP PRIVATE(j, healpixvector, angle_los, id, killray,psi_x,psi_z ) REDUCTION (+ : kk)
 #endif 
 
@@ -177,7 +192,7 @@ ENDIF
       rvec(3)=pdr(i)%z-origin(3) 
 
 IF (fieldchoice.EQ."PNT") THEN
-      call rotate_z(rvec(1),rvec(2),rvec(3),psi_z) 
+      call rotate_z(rvec(1),rvec(2),rvec(3),psi_z)
       call rotate_x(rvec(1),rvec(2),rvec(3),psi_x)
 ENDIF
        
@@ -211,9 +226,24 @@ ENDIF
       rvec(2)=pdr(rb(k))%y-origin(2)
       rvec(3)=pdr(rb(k))%z-origin(3)
 
+      vel_vec(1) = pdr(rb(k))%vx
+      vel_vec(2) = pdr(rb(k))%vy
+      vel_vec(3) = pdr(rb(k))%vz
+
+!   test_module = sqrt(pdr(rb(k))%vx**2 + pdr(rb(k))%vy**2 + pdr(rb(k))%vz**2)
+!   test_angle = acos(dot_product(rvec,vel_vec)/test_module/sqrt(rvec(1)**2 +rvec(2)**2 + rvec(3)**2))
+
 IF (fieldchoice.EQ."PNT") THEN
-      call rotate_z(rvec(1),rvec(2),rvec(3),psi_z) 
-      call rotate_x(rvec(1),rvec(2),rvec(3),psi_x) 
+      temp_vec = rvec + vel_vec
+      
+      call rotate_z(temp_vec(1),temp_vec(2),temp_vec(3),psi_z)
+      call rotate_x(temp_vec(1),temp_vec(2),temp_vec(3),psi_x)
+
+      call rotate_z(rvec(1),rvec(2),rvec(3),psi_z)
+      call rotate_x(rvec(1),rvec(2),rvec(3),psi_x)
+
+      vel_vec = temp_vec - rvec
+
 ENDIF
 
       !next two lines return the ipix ray that the rvec(1:3) point belongs to.
@@ -254,9 +284,14 @@ ENDIF
             endif
          endif !healpixvector(3)
 !       !updates memory and stores the evaluation point in the original computational domain (so evaluation point + origin)
+
+
        pdr(IDlist_pdr(p))%epray(ipix) = pdr(IDlist_pdr(p))%epray(ipix)+1
        id = pdr(IDlist_pdr(p))%epray(ipix)
        if (pdr(IDlist_pdr(p))%epray(ipix).gt.maxpoints) STOP 'Increase maxpoints!'
+
+       call project(vel_vec,healpixvector,pdr(IDlist_pdr(p))%velocity(ipix,id-1) )       
+
        pdr(IDlist_pdr(p))%epoint(1:3,ipix,id)=ep(1:3,ipix)+origin(1:3)
        pdr(IDlist_pdr(p))%projected(ipix,id)=rb(k)
        if (pdr(rb(k))%etype.eq.2) killray(ipix)=.true.
@@ -408,6 +443,44 @@ real(kind=dp) :: x_prev, y_prev, z_prev
    y = cos(psi_x)*y_prev - sin(psi_x)*z_prev
    z = sin(psi_x)*y_prev + cos(psi_x)*z_prev
 end subroutine rotate_x
+
+subroutine project(vec,hvector,proj_length)
+use definitions
+real(kind=dp), intent(in) :: vec(1:3), hvector(1:3)
+real(kind=dp), intent(out) :: proj_length
+real(kind=dp) :: cos_angle, projection(1:3)
+      if (hvector(3).ne.0.0_dp) then
+         projection(3) = (hvector(1)*hvector(3)*vec(1) + hvector(2)*hvector(3)*&
+                  &vec(2) + (hvector(3)**2)*vec(3))/(hvector(1)**2+hvector(2)**2+&
+                  &hvector(3)**2)
+         projection(2) = projection(3)*hvector(2)/hvector(3)
+         projection(1) = projection(3)*hvector(1)/hvector(3)
+      else
+         if (hvector(1).eq.0.0_dp) then
+            projection(1) = 0.0_dp
+            projection(2) = vec(2)
+            projection(3) = 0.0_dp
+         else if (hvector(2).eq.0.0_dp) then
+            projection(1) = vec(1)
+            projection(2) = 0.0_dp
+            projection(3) = 0.0_dp
+         else
+            projection(3) = 0.0_dp
+            projection(1) = ((hvector(1)**2)*vec(1) + hvector(1)*hvector(2)*vec(2))/&
+                  &(hvector(1)**2 + hvector(2)**2)
+            projection(2) = projection(1) * hvector(2)/hvector(1)
+         endif
+      endif
+     proj_length = sqrt(projection(1)**2 + projection(2)**2 + projection(3)**2)
+     if (proj_length > 1.0D-8) then
+         cos_angle = dot_product(projection,hvector)/proj_length/&
+                 &sqrt(hvector(1)**2 + hvector(2)**2 + hvector(3)**2)
+         if (abs(cos_angle + 1.0D0) < 1.0D-4) then !if cos = -1.0
+             proj_length = -proj_length
+         endif
+     endif
+
+end subroutine
 
 
 

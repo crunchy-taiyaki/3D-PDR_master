@@ -1,18 +1,18 @@
 !T.Bisbas, T.Bell
 
-subroutine escape_probability(transition, dust_temperature, nrays, nlev,nfreq, &
+subroutine escape_probability(transition, dust_temperature,inside_outflow,nrays, nlev,nfreq, &
                    &A_COEFFS, B_COEFFS, C_COEFFS, &
                    &frequencies,s_evalpop, maxpoints,&
-                   & T_evalpoint, vel_evalpoint, Tguess,velocity_flag,mode,v_turb, v_gas, &
+                   &Tguess,velocity_flag,mode,v_turb, vel_evalpoint, &
                    &s_jjr, s_pop, s_evalpoint, weights,cooling_rate,line,tau,&
                    &coolant,density,metallicity,bbeta)
 
 
 use definitions
-use maincode_module, only : p,pdr,vectors
+use maincode_module, only : p,pdr,vectors,fieldchoice
 use healpix_types
 use healpix_module
-use global_module, only: g2d
+use global_module, only: g2d, g2d_outflow
 
 implicit none
 
@@ -28,14 +28,15 @@ real(kind=dp), intent(in) :: C_COEFFS(1:nlev, 1:nlev)
 real(kind=dp), intent(in) :: frequencies(1:nlev, 1:nlev)
 real(kind=dp), intent(in) :: s_evalpop(0:nrays-1,0:maxpoints,1:nlev)
 real(kind=dp), intent(in) :: s_evalpoint(1:3,0:nrays-1,0:maxpoints)
-real(kind=dp), intent(in) :: T_evalpoint(0:nrays-1,0:maxpoints)
+
 character(len=1),intent(in) :: velocity_flag
 character(len=4),intent(in) :: mode
+real(kind=dp),intent(in) :: Tguess, v_turb
 real(kind=dp), intent(in) :: vel_evalpoint(0:nrays-1,0:maxpoints)
-real(kind=dp) :: Tguess, v_turb, v_gas !, intent(in)
 real(kind=dp), intent(in) :: weights(1:nlev)
 real(kind=dp), intent(in) :: s_pop(1:nlev)
 real(kind=dp), intent(in) :: dust_temperature,density,metallicity
+logical, intent(in) :: inside_outflow
 
 real(kind=dp), intent(out) :: line(1:nlev,1:nlev)
 real(kind=dp), intent(out) :: cooling_rate
@@ -44,20 +45,23 @@ real(kind=dp),intent(out) :: bbeta(1:nlev,1:nlev,0:nrays-1)
 real(kind=dp), intent(inout) :: transition(1:nlev,1:nlev)
 
 integer(kind=i4b) :: i, j
-integer(kind=i4b) :: ifreq
+
 integer(kind=i4b) :: ilevel, jlevel
 real(kind=dp) :: beta_ij, beta_ij_sum
 real(kind=dp) :: frac1, frac2, frac3, rhs2 
-real(kind=dp) :: sigma,sigma_p, thermal_vel
-real(kind=dp) :: phi
+real(kind=dp) :: delta_vel,thermal_vel
+
+!integer(kind=i4b) :: ifreq
+!real(kind=dp), intent(in) :: T_evalpoint(0:nrays-1,0:maxpoints)
+!real(kind=dp) :: sigma,sigma_p
+!real(kind=dp) :: freq(0:nfreq-1),phi_p(0:nfreq-1), phi
+!real(kind=dp) :: BB_CMBR, BB_ij_gas
+!real(kind=dp) :: tau_nu(0:nfreq-1),beta_nu(0:nfreq-1),I_nu(0:nfreq-1),J_ij_ray(0:nrays-1)
+
 real(kind=dp) :: tpop, tmp2
 real(kind=dp) :: S_ij, BB_ij, J_ij
 real(kind=dp) :: tau_increment
-real(kind=dp) :: freq(0:nfreq-1),phi_p(0:nfreq-1)
-real(kind=dp) :: delta_vel
-real(kind=dp) :: BB_CMBR, BB_ij_gas
 real(kind=dp) :: tau_ij(0:nrays-1)
-real(kind=dp) :: tau_nu(0:nfreq-1),beta_nu(0:nfreq-1),I_nu(0:nfreq-1),J_ij_ray(0:nrays-1)
 real(kind=dp) :: beta_ij_ray(0:nrays-1)
 real(kind=dp) :: field(1:nlev,1:nlev)
 real(kind=dp) :: emissivity, bb_ij_dust, ngrain, rho_grain
@@ -70,157 +74,159 @@ field=0.0D0
 frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
 
 
+
     do ilevel=1,nlev
        do jlevel=1,nlev !i>j
          if (jlevel.ge.ilevel) exit
 
 	 if (mode.eq.'full') then
+         write(6,*) 'full mode is not available' 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!START OF MODE:FULL	 
 	 !init frequency array
-	 sigma_p=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)*frequencies(ilevel,jlevel)/C
-	 do ifreq=0,nfreq-1
-	   freq(ifreq)=frequencies(ilevel,jlevel)*C/(C+v_gas*1d5)-3*sigma_p+ifreq*3*sigma_p*2/(nfreq-1)
-	 enddo !ifreq=0,nfreq-1	
+!	 sigma_p=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)*frequencies(ilevel,jlevel)/C
+!	 do ifreq=0,nfreq-1
+!	   freq(ifreq)=frequencies(ilevel,jlevel)*C/(C+v_gas*1d5)-3*sigma_p+ifreq*3*sigma_p*2/(nfreq-1)
+!	 enddo !ifreq=0,nfreq-1	
 
-         tau_nu = 0.
-         tau_ij = 0.
-         beta_ij_ray = 0.
-         beta_ij = 0.
-         J_ij = 0.
+!         tau_nu = 0.
+!         tau_ij = 0.
+!         beta_ij_ray = 0.
+!         beta_ij = 0.
+!         J_ij = 0.
 
-         do j=0,nrays-1
+!         do j=0,nrays-1
 
-	 do ifreq=0,nfreq-1
-	    !CMBR emission
-            BB_CMBR = 2.0D0*HP*(freq(ifreq)**3)*(1.0D0/(EXP(HP*freq(ifreq)/KB/2.7D0)-1.0D0))&
-                            &/(C**2) !Planck function !2.7D0 is the CMBR temperature
-            I_nu(ifreq) = BB_CMBR
-	    do i=1,s_jjr(j)
+!	 do ifreq=0,nfreq-1
+!	    !CMBR emission
+!            BB_CMBR = 2.0D0*HP*(freq(ifreq)**3)*(1.0D0/(EXP(HP*freq(ifreq)/KB/2.7D0)-1.0D0))&
+!                            &/(C**2) !Planck function !2.7D0 is the CMBR temperature
+!            I_nu(ifreq) = BB_CMBR
+!	    do i=1,s_jjr(j)
 
-#ifdef PSEUDO_1D
-             if (j.ne.6) then
-               tau_nu(j) = 1.0D50
-             else
-#endif
-#ifdef PSEUDO_2D
-             if (abs(vectors(3,j).gt.1d-10) then
-	       tau_nu(j) = 1.0D50 !Not in Equator
-             else
-#endif
+!#ifdef PSEUDO_1D
+!             if (j.ne.6) then
+!               tau_nu(j) = 1.0D50
+!             else
+!#endif
+!#ifdef PSEUDO_2D
+!             if (abs(vectors(3,j).gt.1d-10) then
+!	       tau_nu(j) = 1.0D50 !Not in Equator
+!             else
+!#endif
             !calculations of tau_ij
-            frac1=(A_COEFFS(ilevel,jlevel)*(C**3))/(8.0*pi*(frequencies(ilevel,jlevel)**3))
-            frac3=((s_evalpop(j,i-1,jlevel)*weights(ilevel)-s_evalpop(j,i-1,ilevel)*weights(jlevel))+&
-            &(s_evalpop(j,i,jlevel)*weights(ilevel)-s_evalpop(j,i,ilevel)*weights(jlevel)))/2./weights(jlevel)
-            rhs2=sqrt((s_evalpoint(1,j,i-1)-s_evalpoint(1,j,i))**2+&
-              &(s_evalpoint(2,j,i-1)-s_evalpoint(2,j,i))**2+&
-              &(s_evalpoint(3,j,i-1)-s_evalpoint(3,j,i))**2) !adaptive step
-            sigma = sqrt(8.0*KB*T_evalpoint(j,i)/PI/MP + v_turb**2)*frequencies(ilevel,jlevel)/C
-            phi = exp(-((1+vel_evalpoint(j,i)*1d5/C)*freq(ifreq)-frequencies(ilevel,jlevel))**2/&
-                        &(2.0*sigma**2))/&
-                            &(sigma*sqrt(2.*pi))
-            tau_increment=frac1*phi*frac3*rhs2*PC
-            tau_nu(ifreq)=tau_nu(ifreq)+tau_increment !optical depth
-#ifdef PSEUDO_1D
-            endif !j.ne.6
-#endif
-#ifdef PSEUDO_2D
-            endif !(abs(vectors(3,j).gt.1d-10)
-#endif
-	    !Dust emission
-            NGRAIN=2.0D-12*density*metallicity*100./g2d
-            rho_grain=2.0D0
-            EMISSIVITY=(RHO_GRAIN*NGRAIN)*(0.01*(1.3*freq(ifreq)/3.0D11))
-            BB_ij_dust = (1.0D0/(EXP(HP*freq(ifreq)/KB/DUST_TEMPERATURE)-1.D0)*EMISSIVITY)*&
-                               &2.0D0*HP*(freq(ifreq)**3)/(C**2)
+!            frac1=(A_COEFFS(ilevel,jlevel)*(C**3))/(8.0*pi*(frequencies(ilevel,jlevel)**3))
+!            frac3=((s_evalpop(j,i-1,jlevel)*weights(ilevel)-s_evalpop(j,i-1,ilevel)*weights(jlevel))+&
+!            &(s_evalpop(j,i,jlevel)*weights(ilevel)-s_evalpop(j,i,ilevel)*weights(jlevel)))/2./weights(jlevel)
+!            rhs2=sqrt((s_evalpoint(1,j,i-1)-s_evalpoint(1,j,i))**2+&
+!              &(s_evalpoint(2,j,i-1)-s_evalpoint(2,j,i))**2+&
+!              &(s_evalpoint(3,j,i-1)-s_evalpoint(3,j,i))**2) !adaptive step
+!            sigma = sqrt(8.0*KB*T_evalpoint(j,i)/PI/MP + v_turb**2)*frequencies(ilevel,jlevel)/C
+!            phi = exp(-((1+vel_evalpoint(j,i)*1d5/C)*freq(ifreq)-frequencies(ilevel,jlevel))**2/&
+!                        &(2.0*sigma**2))/&
+!                           &(sigma*sqrt(2.*pi))
+!            tau_increment=frac1*phi*frac3*rhs2*PC
+!            tau_nu(ifreq)=tau_nu(ifreq)+tau_increment !optical depth
+!#ifdef PSEUDO_1D
+!            endif !j.ne.6
+!#endif
+!#ifdef PSEUDO_2D
+!            endif !(abs(vectors(3,j).gt.1d-10)
+!#endif
+!	    !Dust emission
+!            NGRAIN=2.0D-12*density*metallicity*100./g2d
+!            rho_grain=2.0D0
+!            EMISSIVITY=(RHO_GRAIN*NGRAIN)*(0.01*(1.3*freq(ifreq)/3.0D11))
+!            BB_ij_dust = (1.0D0/(EXP(HP*freq(ifreq)/KB/DUST_TEMPERATURE)-1.D0)*EMISSIVITY)*&
+!                               &2.0D0*HP*(freq(ifreq)**3)/(C**2)
 
             !Blackbody emission
-            BB_ij_gas = (1.0D0/(EXP(HP*frequencies(ilevel,jlevel)/KB/Tguess)-1.0D0))*&
-                            &2.0D0*HP*(frequencies(ilevel,jlevel)**3)/(C**2)
+!            BB_ij_gas = (1.0D0/(EXP(HP*frequencies(ilevel,jlevel)/KB/Tguess)-1.0D0))*&
+!                            &2.0D0*HP*(frequencies(ilevel,jlevel)**3)/(C**2)
 
             !calculation of source function (taken from UCL_PDR)
-            TMP2=2.0D0*HP*(FREQUENCIES(ilevel,jlevel)**3)/(C**2)
-            if (s_evalpop(j,i,ilevel).eq.0) then
-              S_ij=0.0D0
-            else	    
-              TPOP=(s_evalpop(j,i,jlevel)*WEIGHTS(ilevel))/(s_evalpop(j,i,ilevel)*WEIGHTS(jlevel))-1.0D0
-              if(abs(TPOP).lt.1.0D-50) then
-                S_ij=HP*FREQUENCIES(ilevel,jlevel)*s_evalpop(j,i,ilevel)*A_COEFFS(ilevel,jlevel)/4./pi
-              else
-                S_ij=TMP2/TPOP
-              endif
-            endif
+!            TMP2=2.0D0*HP*(FREQUENCIES(ilevel,jlevel)**3)/(C**2)
+!            if (s_evalpop(j,i,ilevel).eq.0) then
+!              S_ij=0.0D0
+!            else	    
+!              TPOP=(s_evalpop(j,i,jlevel)*WEIGHTS(ilevel))/(s_evalpop(j,i,ilevel)*WEIGHTS(jlevel))-1.0D0
+!              if(abs(TPOP).lt.1.0D-50) then
+!                S_ij=HP*FREQUENCIES(ilevel,jlevel)*s_evalpop(j,i,ilevel)*A_COEFFS(ilevel,jlevel)/4./pi
+!              else
+!                S_ij=TMP2/TPOP
+!              endif
+!            endif
 
-            !radiation transfer in integral form
-            if (tau_increment.gt.1d10) then
-              I_nu(ifreq) = S_ij
-            elseif (tau_increment.gt.1d-6) then
-	      I_nu(ifreq) = exp(-tau_increment)*I_nu(ifreq) + (1 + exp(-tau_increment))*(S_ij + BB_ij_dust)
-            else
-              I_nu(ifreq) = I_nu(ifreq)
-            endif
+!            !radiation transfer in integral form
+!            if (tau_increment.gt.1d10) then
+!              I_nu(ifreq) = S_ij
+!            elseif (tau_increment.gt.1d-6) then
+!	      I_nu(ifreq) = exp(-tau_increment)*I_nu(ifreq) + (1 + exp(-tau_increment))*(S_ij + BB_ij_dust)
+!            else
+!              I_nu(ifreq) = I_nu(ifreq)
+!            endif
 
-         enddo!i=1,s_jjr(j) 
+ !        enddo!i=1,s_jjr(j) 
 
             !Doppler profile for element p
-	    phi_p(ifreq) = exp(-((1+v_gas*1d5/C)*freq(ifreq)-frequencies(ilevel,jlevel))**2/&
-                        &(2.0*sigma_p**2))/&
-                            &(sigma_p*sqrt(2.*pi))
+!	    phi_p(ifreq) = exp(-((1+v_gas*1d5/C)*freq(ifreq)-frequencies(ilevel,jlevel))**2/&
+!                        &(2.0*sigma_p**2))/&
+!                            &(sigma_p*sqrt(2.*pi))
 
-            !monochromatic escape probability
-            if (tau_nu(ifreq).lt.-5.0D0) then
-              beta_nu(ifreq)=(1.0D0-EXP(5.0D0))/(-5.0D0)*phi_p(ifreq)
-            else if (abs(tau_nu(ifreq)).lt.1.0D-8) then
-              beta_nu(ifreq)=1.0D0*phi_p(ifreq)
-            else
-              beta_nu(ifreq)=(1.0D0-EXP(-tau_nu(ifreq)))/tau_nu(ifreq)*phi_p(ifreq)
-             endif
-             
-             enddo !ifreq=0,nfreq-1
+!            !monochromatic escape probability
+!            if (tau_nu(ifreq).lt.-5.0D0) then
+!              beta_nu(ifreq)=(1.0D0-EXP(5.0D0))/(-5.0D0)*phi_p(ifreq)
+!            else if (abs(tau_nu(ifreq)).lt.1.0D-8) then
+!              beta_nu(ifreq)=1.0D0*phi_p(ifreq)
+!            else
+!              beta_nu(ifreq)=(1.0D0-EXP(-tau_nu(ifreq)))/tau_nu(ifreq)*phi_p(ifreq)
+!             endif
+!             
+!             enddo !ifreq=0,nfreq-1
 
-             ! mean integrated intensity calculation
-             do ifreq=0,nfreq-2
-               J_ij_ray(j) = J_ij_ray(j)+&
-                 &(I_nu(ifreq+1)*phi_p(ifreq+1)+I_nu(ifreq)*phi_p(ifreq))*&
-                 &abs(freq(ifreq+1)-freq(ifreq))/2.
-             enddo !ifreq=0,nfreq-2
+!             ! mean integrated intensity calculation
+!             do ifreq=0,nfreq-2
+!               J_ij_ray(j) = J_ij_ray(j)+&
+!                 &(I_nu(ifreq+1)*phi_p(ifreq+1)+I_nu(ifreq)*phi_p(ifreq))*&
+!                 &abs(freq(ifreq+1)-freq(ifreq))/2.
+!             enddo !ifreq=0,nfreq-2
 
            ! tau and beta integration
-             if (j.ne.6) then
-               tau_ij(j) = 1.0D50
-               beta_ij_ray(j) = 0.
-             else
+!             if (j.ne.6) then
+!               tau_ij(j) = 1.0D50
+!               beta_ij_ray(j) = 0.
+!             else
 
-              do ifreq=0,nfreq-2
-                tau_ij(j) = tau_ij(j) +&
-                 &(tau_nu(ifreq+1)+tau_nu(ifreq))*&
-                 &abs(freq(ifreq+1)-freq(ifreq))/2.
-                beta_ij_ray(j) = beta_ij_ray(j)+&
-                 &(beta_nu(ifreq+1)+beta_nu(ifreq))*&
-                 &abs(freq(ifreq+1)-freq(ifreq))/2.       
-              enddo !ifreq=0,nfreq-2
-             endif !j.ne.6
+!              do ifreq=0,nfreq-2
+!                tau_ij(j) = tau_ij(j) +&
+!                 &(tau_nu(ifreq+1)+tau_nu(ifreq))*&
+!                 &abs(freq(ifreq+1)-freq(ifreq))/2.
+!                beta_ij_ray(j) = beta_ij_ray(j)+&
+!                 &(beta_nu(ifreq+1)+beta_nu(ifreq))*&
+!                 &abs(freq(ifreq+1)-freq(ifreq))/2.       
+!              enddo !ifreq=0,nfreq-2
+!             endif !j.ne.6
 
-         tau(ilevel,jlevel,j) = tau_ij(j)
-         bbeta(ilevel,jlevel,j) = beta_ij_ray(j)
-         enddo !j=0,nrays-1
+!         tau(ilevel,jlevel,j) = tau_ij(j)
+!         bbeta(ilevel,jlevel,j) = beta_ij_ray(j)
+!         enddo !j=0,nrays-1
 
-#ifdef PSEUDO_1D
-         beta_ij = sum(beta_ij_ray)
-         field(ilevel,jlevel) = sum(J_ij_ray)
-#elif PSEUDO_2D
-         beta_ij = sum(beta_ij_ray) / 4.
-         field(ilevel,jlevel) = sum(J_ij_ray) / 4.
-#else
-         beta_ij = sum(beta_ij_ray) / real(nrays,kind=DP) 
-         field(ilevel,jlevel) = sum(J_ij_ray) / real(nrays,kind=DP) 
-#endif
+!#ifdef PSEUDO_1D
+!         beta_ij = sum(beta_ij_ray)
+!         field(ilevel,jlevel) = sum(J_ij_ray)
+!#elif PSEUDO_2D
+!         beta_ij = sum(beta_ij_ray) / 4.
+!         field(ilevel,jlevel) = sum(J_ij_ray) / 4.
+!#else
+!         beta_ij = sum(beta_ij_ray) / real(nrays,kind=DP) 
+!         field(ilevel,jlevel) = sum(J_ij_ray) / real(nrays,kind=DP) 
+!#endif
 
-         bbeta(ilevel,jlevel,6) = beta_ij
+ !        bbeta(ilevel,jlevel,6) = beta_ij
          !line(ilevel,jlevel) = A_COEFFS(ilevel,jlevel)*HP*frequencies(ilevel,jlevel) * &
          !                    & s_pop(ilevel)*beta_ij*(S_ij-BB_ij)/S_ij
-         line(ilevel,jlevel) = field(ilevel,jlevel)/BB_ij_gas
-         cooling_rate = cooling_rate + line(ilevel,jlevel)
-         goto 3
+!         line(ilevel,jlevel) = field(ilevel,jlevel)/BB_ij_gas
+!         cooling_rate = cooling_rate + line(ilevel,jlevel)
+!         goto 3
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	 else !mode.eq.'lvg'
          tau_ij=0.0D0
@@ -230,7 +236,11 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
          frac1=(A_COEFFS(ilevel,jlevel)*(C**3))/(8.0*pi*(frequencies(ilevel,jlevel)**3))
          TMP2=2.0D0*HP*(FREQUENCIES(ilevel,jlevel)**3)/(C**2)
          BB_ij = TMP2*(1.0D0/(EXP(HP*frequencies(ilevel,jlevel)/KB/2.7D0)-1.0D0)) !Planck function !2.7D0 is the CMBR temperature
-         NGRAIN=2.0D-12*density*metallicity*100./g2d
+         if (inside_outflow) then
+             NGRAIN=2.0D-12*density*metallicity*100./g2d_outflow
+         else
+             NGRAIN=2.0D-12*density*metallicity*100./g2d
+         endif
          rho_grain=2.0D0
          EMISSIVITY=(RHO_GRAIN*NGRAIN)*(0.01*(1.3*FREQUENCIES(ilevel,jlevel)/3.0D11))
          BB_ij_dust = TMP2*(1.0D0/(EXP(HP*frequencies(ilevel,jlevel)/KB/DUST_TEMPERATURE)-1.D0)*EMISSIVITY)
@@ -251,9 +261,9 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
          endif
          do j=0,nrays-1
 #ifdef PSEUDO_1D
-         if (j.ne.6) then
-           tau_ij(j) = 1.0D50
-         else
+    if (j.ne.5) then
+       tau_ij(j) = 1.0D50
+    else
 #endif
 #ifdef PSEUDO_2D
          if (abs(vectors(3,j).gt.1d-10) then
@@ -274,9 +284,8 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
 
          else
            
-           !delta_vel = abs(vel_evalpoint(j,i)-v_gas)*1d5
-           thermal_vel=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
 
+           thermal_vel=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
            do i=1,s_jjr(j)
              !calculations of tau_ij
            frac3=((s_evalpop(j,i-1,jlevel)*weights(ilevel)-s_evalpop(j,i-1,ilevel)*weights(jlevel))+&
@@ -284,19 +293,20 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
            rhs2=sqrt((s_evalpoint(1,j,i-1)-s_evalpoint(1,j,i))**2+&
               &(s_evalpoint(2,j,i-1)-s_evalpoint(2,j,i))**2+&
               &(s_evalpoint(3,j,i-1)-s_evalpoint(3,j,i))**2) !adaptive step
-           delta_vel = abs(vel_evalpoint(j,i)-vel_evalpoint(j,0))*1d5
-           !tau_increment = frac1*frac3*rhs2*PC/delta_vel
+           delta_vel = abs(vel_evalpoint(j,i)-vel_evalpoint(j,0))*1d5           
+
            if (delta_vel.lt.thermal_vel) then
-	     tau_increment = frac1*frac2*frac3*rhs2*PC
+	     tau_increment = frac1*frac3*rhs2*PC/thermal_vel
            else
 	     tau_increment = frac1*frac3*rhs2*PC/delta_vel
            endif
            tau_ij(j)=tau_ij(j)+tau_increment !optical depth
            enddo !i=1,jr(j)
+
          endif	
 
 #ifdef PSEUDO_1D
-         endif
+endif
 #endif
 #ifdef PSEUDO_2D
          endif
@@ -333,7 +343,7 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
 
 
 1 continue
-         bbeta(ilevel,jlevel,6) = beta_ij
+         bbeta(ilevel,jlevel,5) = beta_ij
          line(ilevel,jlevel) = A_COEFFS(ilevel,jlevel)*HP*frequencies(ilevel,jlevel) * &
                              & s_pop(ilevel)*beta_ij*(S_ij-BB_ij)/S_ij
          cooling_rate = cooling_rate + line(ilevel,jlevel)

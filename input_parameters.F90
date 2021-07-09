@@ -12,7 +12,7 @@ SUBROUTINE readparams
                               & Tlow0, Thigh0, Tmin, Tmax, Fcrit, Tdiff, dust_temperature,writeiterations,&
                               & chemiterations, zeta, end_time, C12Oinput, CIIinput, CIinput, OIinput,&
 			      & directory, indir
-  use global_module, only : g2d, metallicity, omega, grain_radius
+  use global_module, only : g2d, g2d_outflow, max_velocity, metallicity, omega, grain_radius
 
   integer::i
   real(kind=dp):: dummy
@@ -36,6 +36,8 @@ SUBROUTINE readparams
   read(12,*) dust_temperature
   read(12,*) end_time
   read(12,*) g2d
+  read(12,*) g2d_outflow
+  read(12,*) max_velocity
   read(12,*) metallicity
   read(12,*) omega
   read(12,*) grain_radius

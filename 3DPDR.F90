@@ -24,9 +24,10 @@ integer(kind=i4b)::NRGR,NRH2,NRHD,NRCO,NRCI,NRSI
 real(kind=dp)::uvfieldaux
 real(kind=dp),allocatable::prev_cooling(:)
 !reversing rows declaration
-real(kind=dp),allocatable::x_rev(:),y_rev(:),z_rev(:),n_rev(:),radial_velocity_rev(:)
+real(kind=dp),allocatable::x_rev(:),y_rev(:),z_rev(:),n_rev(:),vx_rev(:), vy_rev(:), vz_rev(:)
 character(len=1)::velocity_flag
 character(len=4)::mode
+logical :: inside_outflow
 
 
 write(6,*) '=============================================================================='
@@ -93,7 +94,9 @@ write(6,*) 'Total iterations:         ',itertot
 write(6,*) 'Output interval / iter.:  ',iterstep
 write(6,*) 'Chemiterations:           ',chemiterations
 write(6,*) 'Zeta:                     ',zeta*1.3d-17
-write(6,*) 'Gas-to-dust               ',g2d!*100.0
+write(6,*) 'Gas-to-dust               ',g2d
+write(6,*) 'Gas-to-dust inside outflow',g2d_outflow
+write(6,*) 'maximal vel outside of cavity',max_velocity
 write(6,*) 'Metallicity               ',metallicity
 write(6,*) 'Omega                     ',omega
 write(6,*) 'Grain radius              ',grain_radius
@@ -173,11 +176,12 @@ open(unit=2,file=input_file,status='old')
 
 do p=1,grand_ptot
     if (velocity_flag .eq. 'y') then
-      read(2,*) xpos,ypos,zpos,denst,radial_velocity
-      !radial_velocity = radial_velocity
+      read(2,*) xpos,ypos,zpos,denst,xvel,yvel,zvel
     else
       read(2,*) xpos,ypos,zpos,denst 
-      radial_velocity = 0.
+      xvel = 0.0D0
+      yvel = 0.0D0
+      zvel =  0.0D0
     endif
     if (denst.le.rho_min) then
       ion_ptot = ion_ptot + 1
@@ -186,7 +190,9 @@ do p=1,grand_ptot
       pdr(p)%y=ypos
       pdr(p)%z=zpos
       pdr(p)%rho=denst
-      pdr(p)%velocity = radial_velocity
+      pdr(p)%vx = xvel
+      pdr(p)%vy = yvel
+      pdr(p)%vz = zvel
       IDlist_ion(ion_ptot)=p
     endif
     if ((denst.gt.rho_min).AND.(denst.le.rho_max)) then
@@ -196,7 +202,9 @@ do p=1,grand_ptot
       pdr(p)%y=ypos
       pdr(p)%z=zpos
       pdr(p)%rho=denst
-      pdr(p)%velocity = radial_velocity
+      pdr(p)%vx = xvel
+      pdr(p)%vy = yvel
+      pdr(p)%vz = zvel
       if (denst.gt.maximum_density) maximum_density=denst
       if (denst.lt.minimum_density) minimum_density=denst
       IDlist_pdr(pdr_ptot)=p
@@ -208,13 +216,13 @@ do p=1,grand_ptot
       pdr(p)%y=ypos
       pdr(p)%z=zpos
       pdr(p)%rho=denst
-      pdr(p)%velocity = radial_velocity
+      pdr(p)%vx = xvel
+      pdr(p)%vy = yvel
+      pdr(p)%vz = zvel
       IDlist_dark(dark_ptot)=p
     endif
 enddo
-do p=1,grand_ptot
-  write(6,*) pdr(p)%x,pdr(p)%y,pdr(p)%z,pdr(p)%rho,pdr(p)%velocity
-enddo
+
 write(6,*) 'PDR elements       = ',pdr_ptot
 write(6,*) 'IONIZED elements   = ',ion_ptot
 write(6,*) 'MOLECULAR elements = ',dark_ptot
@@ -228,26 +236,34 @@ allocate(x_rev(1:pdr_ptot))
 allocate(y_rev(1:pdr_ptot))
 allocate(z_rev(1:pdr_ptot))
 allocate(n_rev(1:pdr_ptot))
-allocate(radial_velocity_rev(1:pdr_ptot))
+allocate(vx_rev(1:pdr_ptot))
+allocate(vy_rev(1:pdr_ptot))
+allocate(vz_rev(1:pdr_ptot))
 do pp=1,pdr_ptot-2
   p=IDlist_pdr(pp)
   x_rev(pp)=pdr(p)%x
   y_rev(pp)=pdr(p)%y
   z_rev(pp)=pdr(p)%z
   n_rev(pp)=pdr(p)%rho
-  radial_velocity_rev(pp)=pdr(p)%velocity
+  vx_rev(pp)=pdr(p)%vx
+  vy_rev(pp)=pdr(p)%vy
+  vz_rev(pp)=pdr(p)%vz
 enddo
 x_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%x
 y_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%y
 z_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%z
 n_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%rho
-radial_velocity_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%velocity
+vx_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%vx
+vy_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%vy
+vz_rev(pdr_ptot-1)=pdr(IDlist_pdr(pdr_ptot))%vz
 
 x_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%x
 y_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%y
 z_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%z
 n_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%rho
-radial_velocity_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%velocity
+vx_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%vx
+vy_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%vy
+vz_rev(pdr_ptot)=pdr(IDlist_pdr(pdr_ptot-1))%vz
 
 !updates..
 do pp=1,pdr_ptot
@@ -256,7 +272,9 @@ do pp=1,pdr_ptot
   pdr(p)%y=y_rev(pp)
   pdr(p)%z=z_rev(pp)
   pdr(p)%rho=n_rev(pp)
-  pdr(p)%velocity=radial_velocity_rev(pp)
+  pdr(p)%vx=vx_rev(pp)
+  pdr(p)%vy=vy_rev(pp)
+  pdr(p)%vz=vz_rev(pp)
 enddo
 !end reversing...
 
@@ -370,6 +388,7 @@ do pp=1,pdr_ptot
     p=IDlist_pdr(pp)
     allocate(pdr(p)%epray(0:nrays-1))
     allocate(pdr(p)%epoint(1:3,0:nrays-1,0:maxpoints))
+    allocate(pdr(p)%velocity(0:nrays-1,0:maxpoints))
     allocate(pdr(p)%projected(0:nrays-1,0:maxpoints))
     allocate(pdr(p)%columndensity(0:nrays-1))
     allocate(pdr(p)%AV(0:nrays-1))
@@ -389,6 +408,7 @@ enddo
 if (dark_ptot.gt.0) then
   allocate(pdr(IDlist_dark(1))%epray(0:nrays-1))
   allocate(pdr(IDlist_dark(1))%epoint(1:3,0:nrays-1,0:maxpoints))
+  allocate(pdr(IDlist_dark(1))%velocity(0:nrays-1,0:maxpoints))
   allocate(pdr(IDlist_dark(1))%projected(0:nrays-1,0:maxpoints))
   allocate(pdr(IDlist_dark(1))%columndensity(0:nrays-1))
   allocate(pdr(IDlist_dark(1))%AV(0:nrays-1))
@@ -507,7 +527,10 @@ DO II=1,CHEMITERATIONS
   do pp=1,pdr_ptot
     p=IDlist_pdr(pp)
 !    if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
-    CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),nrays,pdr(p)%rad_surface(0:nrays-1),&
+
+    inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+
+    CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
@@ -633,7 +656,10 @@ DO ITERATION=1,ITERTOT
         do pp=1,pdr_ptot
           p=IDlist_pdr(pp)
 !          if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
-          CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),nrays,pdr(p)%rad_surface(0:nrays-1),&
+
+          inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+
+          CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
              &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
              &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
              &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
@@ -710,7 +736,7 @@ DO ITERATION=1,ITERTOT
 !$OMP PRIVATE(dummyarray_CII_tau,dummyarray_CI_tau,dummyarray_OI_tau,dummyarray_C12O_tau)&
 !$OMP PRIVATE(dummyarray_CII_beta,dummyarray_CI_beta,dummyarray_OI_beta,dummyarray_C12O_beta) &
 !$OMP PRIVATE(CIIsolution,CIsolution,OIsolution,C12Osolution) &
-!$OMP PRIVATE(CIIevalpop,CIevalpop,OIevalpop,C12Oevalpop,eval_temp,eval_vel)
+!$OMP PRIVATE(CIIevalpop,CIevalpop,OIevalpop,C12Oevalpop)
 #endif
 
     do pp=1,pdr_ptot
@@ -758,8 +784,7 @@ allocate(CIIevalpop(0:nrays-1,0:maxpoints,1:CII_nlev))
 allocate(CIevalpop(0:nrays-1,0:maxpoints,1:CI_nlev))
 allocate(OIevalpop(0:nrays-1,0:maxpoints,1:OI_nlev))
 allocate(C12Oevalpop(0:nrays-1,0:maxpoints,1:C12O_nlev))
-allocate(eval_temp(0:nrays-1,0:maxpoints))
-allocate(eval_vel(0:nrays-1,0:maxpoints))
+
 CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0 
        ! Specify the evaluation points along each ray from the current pdrpoint
        do j=0,nrays-1
@@ -778,14 +803,9 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
              enddo
           enddo !pdr(p)%epray(j)
        enddo
- 
-       do j=0,nrays-1
-          do i=0,pdr(p)%epray(j)
-		eval_temp(j,i)=pdr(int(pdr(p)%projected(j,i)))%gas_temperature
-                eval_vel(j,i)=pdr(int(pdr(p)%projected(j,i)))%velocity
-          enddo 
-       enddo 
-       !
+   
+inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+
        ! Use the LVG (escape probability) method to determine the transition matrices and solve for the level populations
 ! CII calculations -------------------------------------------------
        ! Calculate the collisional rate coefficients
@@ -795,10 +815,10 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
           & pdr(p)%abundance(NELECT)*pdr(p)%rho, pdr(p)%abundance(NHE)*pdr(p)%rho,pdr(p)%abundance(NH2)*pdr(p)%rho,&
           & 1)
 
-       call escape_probability(transition_CII, dusttemperature(pp), nrays, CII_nlev,nfreq, &
+       call escape_probability(transition_CII, dusttemperature(pp),inside_outflow,nrays, CII_nlev,nfreq, &
               &CII_A_COEFFS, CII_B_COEFFS, CII_C_COEFFS, &
               &CII_frequencies, CIIevalpop, maxpoints, &
-              &eval_temp, eval_vel,gastemperature(pp),velocity_flag,mode,&
+              &gastemperature(pp),velocity_flag,mode,&
               &v_turb, pdr(p)%velocity, pdr(p)%epray, pdr(p)%CII_pop, &
               &pdr(p)%epoint, CII_weights,CII_cool(pp),dummyarray_CII, &
               &dummyarray_CII_tau,1,pdr(p)%rho,metallicity,dummyarray_CII_beta)
@@ -821,10 +841,10 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
           & CI_H,CI_HP,CI_EL,CI_HE,CI_H2,CI_PH2,CI_OH2,&
           & CI_C_COEFFS,pdr(p)%abundance(NH)*pdr(p)%rho,pdr(p)%abundance(NPROTOn)*pdr(p)%rho, &
           & pdr(p)%abundance(NELECT)*pdr(p)%rho, pdr(p)%abundance(NHE)*pdr(p)%rho,pdr(p)%abundance(NH2)*pdr(p)%rho,2)
-       call escape_probability(transition_CI, dusttemperature(pp), nrays, CI_nlev, nfreq, &
+       call escape_probability(transition_CI, dusttemperature(pp),inside_outflow, nrays, CI_nlev, nfreq, &
               &CI_A_COEFFS, CI_B_COEFFS, CI_C_COEFFS, &
               &CI_frequencies, CIevalpop, maxpoints, &
-              &eval_temp, eval_vel,gastemperature(pp),velocity_flag,mode,&
+              &gastemperature(pp),velocity_flag,mode,&
               &v_turb, pdr(p)%velocity, pdr(p)%epray, pdr(p)%CI_pop, &
               &pdr(p)%epoint,CI_weights,CI_cool(pp),dummyarray_CI, &
 	      &dummyarray_CI_tau,2,pdr(p)%rho,metallicity,dummyarray_CI_beta)
@@ -847,10 +867,10 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
           & OI_H,OI_HP,OI_EL,OI_HE,OI_H2,OI_PH2,OI_OH2,&
           & OI_C_COEFFS,pdr(p)%abundance(NH)*pdr(p)%rho,pdr(p)%abundance(NPROTON)*pdr(p)%rho, &
           & pdr(p)%abundance(NELECT)*pdr(p)%rho, pdr(p)%abundance(NHE)*pdr(p)%rho,pdr(p)%abundance(NH2)*pdr(p)%rho,3)
-       call escape_probability(transition_OI, dusttemperature(pp), nrays, OI_nlev, nfreq, &
+       call escape_probability(transition_OI, dusttemperature(pp),inside_outflow, nrays, OI_nlev, nfreq, &
               &OI_A_COEFFS, OI_B_COEFFS, OI_C_COEFFS, &
               &OI_frequencies, OIevalpop, maxpoints, &
-              &eval_temp, eval_vel,gastemperature(pp),velocity_flag,mode,&
+              &gastemperature(pp),velocity_flag,mode,&
               &v_turb, pdr(p)%velocity, pdr(p)%epray, pdr(p)%OI_pop, &
               &pdr(p)%epoint,OI_weights,OI_cool(pp),dummyarray_OI, &
               &dummyarray_OI_tau,3,pdr(p)%rho,metallicity,dummyarray_OI_beta)
@@ -873,10 +893,10 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
           & C12O_H,C12O_HP,C12O_EL,C12O_HE,C12O_H2,C12O_PH2,C12O_OH2,&
           & C12O_C_COEFFS,pdr(p)%abundance(NH)*pdr(p)%rho,pdr(p)%abundance(NPROTON)*pdr(p)%rho, &
           & pdr(p)%abundance(NELECT)*pdr(p)%rho, pdr(p)%abundance(NHE)*pdr(p)%rho,pdr(p)%abundance(NH2)*pdr(p)%rho,4)
-       call escape_probability(transition_C12O, dusttemperature(pp), nrays, C12O_nlev, nfreq,&
+       call escape_probability(transition_C12O, dusttemperature(pp),inside_outflow, nrays, C12O_nlev, nfreq,&
               &C12O_A_COEFFS, C12O_B_COEFFS, C12O_C_COEFFS, &
               &C12O_frequencies, C12Oevalpop, maxpoints, &
-              &eval_temp, eval_vel,gastemperature(pp),velocity_flag,mode,&
+              &gastemperature(pp),velocity_flag,mode,&
               &v_turb, pdr(p)%velocity, pdr(p)%epray, pdr(p)%C12O_pop, &
               &pdr(p)%epoint,C12O_weights,C12O_cool(pp),dummyarray_C12O, &
               &dummyarray_C12O_tau,4,pdr(p)%rho,metallicity,dummyarray_C12O_beta)
@@ -899,21 +919,21 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
        endif
 #endif
 
-lines_escape_probability(1,pp) = dummyarray_CII_beta(2,1,6)
-lines_escape_probability(2,pp) = dummyarray_CI_beta(2,1,6)
-lines_escape_probability(3,pp) = dummyarray_CI_beta(3,2,6)
-lines_escape_probability(4,pp) = dummyarray_OI_beta(2,1,6)
-lines_escape_probability(5,pp) = dummyarray_OI_beta(3,2,6)
-lines_escape_probability(6,pp) = dummyarray_C12O_beta(2,1,6)
-lines_escape_probability(7,pp) = dummyarray_C12O_beta(3,2,6)
+lines_escape_probability(1,pp) = dummyarray_CII_beta(2,1,5)
+lines_escape_probability(2,pp) = dummyarray_CI_beta(2,1,5)
+lines_escape_probability(3,pp) = dummyarray_CI_beta(3,2,5)
+lines_escape_probability(4,pp) = dummyarray_OI_beta(2,1,5)
+lines_escape_probability(5,pp) = dummyarray_OI_beta(3,2,5)
+lines_escape_probability(6,pp) = dummyarray_C12O_beta(2,1,5)
+lines_escape_probability(7,pp) = dummyarray_C12O_beta(3,2,5)
 
-lines_tau(1,pp) = dummyarray_CII_tau(2,1,6)
-lines_tau(2,pp) = dummyarray_CI_tau(2,1,6)
-lines_tau(3,pp) = dummyarray_CI_tau(3,2,6)
-lines_tau(4,pp) = dummyarray_OI_tau(2,1,6)
-lines_tau(5,pp) = dummyarray_OI_tau(3,2,6)
-lines_tau(6,pp) = dummyarray_C12O_tau(2,1,6)
-lines_tau(7,pp) = dummyarray_C12O_tau(3,2,6)
+lines_tau(1,pp) = dummyarray_CII_tau(2,1,5)
+lines_tau(2,pp) = dummyarray_CI_tau(2,1,5)
+lines_tau(3,pp) = dummyarray_CI_tau(3,2,5)
+lines_tau(4,pp) = dummyarray_OI_tau(2,1,5)
+lines_tau(5,pp) = dummyarray_OI_tau(3,2,5)
+lines_tau(6,pp) = dummyarray_C12O_tau(2,1,5)
+lines_tau(7,pp) = dummyarray_C12O_tau(3,2,5)
 
 deALLOCATE(CII_C_COEFFS)
 deALLOCATE(CI_C_COEFFS)
@@ -948,8 +968,8 @@ deallocate(CIIevalpop)
 deallocate(CIevalpop)
 deallocate(OIevalpop)
 deallocate(C12Oevalpop)
-deallocate(eval_temp)
-deallocate(eval_vel)
+
+
 
 
 enddo !particles
@@ -977,11 +997,14 @@ do pp=1,pdr_ptot
 #endif
 !   if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
    if (allocated(allheating)) deallocate(allheating); allocate(allheating(1:12))
-    CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),nrays,pdr(p)%rad_surface(0:nrays-1),&
+
+   inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+
+    CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
-    call calc_heating(pdr(p)%rho,gastemperature(pp),dusttemperature(pp),pdr(p)%UVfield, &
+    call calc_heating(inside_outflow,pdr(p)%rho,gastemperature(pp),dusttemperature(pp),pdr(p)%UVfield, &
           &v_turb,nspec,pdr(p)%abundance(:),nreac,rate,allheating,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 
@@ -1314,14 +1337,15 @@ if (iteration.ge.1) then
 !-------------------------------------
 !OUTPUT FOR BETA
 !-------------------------------------
-!out_file = trim(adjustl(directory))//'/'//"beta"
-!out_file2 = trim(adjustl(out_file))//"]"
-!write(6,'(" Writing file [",A)') out_file2
-!open(unit=10,file=out_file,status='replace') 
-!    do pp=1,pdr_ptot
-!       write(10,*) lines_escape_probability(:,pp)
-!    enddo
-! close(10)
+out_file = trim(adjustl(directory))//'/'//"beta"
+out_file2 = trim(adjustl(out_file))//"]"
+write(6,'(" Writing file [",A)') out_file2
+open(unit=10,file=out_file,status='replace') 
+    do pp=1,pdr_ptot
+    p=IDlist_pdr(pp)
+       write(10,*) p,pdr(p)%x, pdr(p)%AV(5),lines_escape_probability(:,pp)
+    enddo
+ close(10)
 
 !-------------------------------------
 !OUTPUT FOR TAU
@@ -1344,7 +1368,7 @@ open(unit=11,file=out_file,status='replace')
    do pp=1,pdr_ptot
       p=IDlist_pdr(pp)
       call analyse_chemistry(p, end_time, pdr(p)%rho, previousgastemperature(pp), &
-        &12, pdr(p)%AV(6), nspec, species,pdr(p)%abundance(1:nspec),nreac, reactant, &
+        &12, pdr(p)%AV(5), nspec, species,pdr(p)%abundance(1:nspec),nreac, reactant, &
         & product, dummy_rate(:,pp))
       write(12,*)
    enddo
@@ -1361,7 +1385,7 @@ open(unit=11,file=out_file,status='replace')
   do pp=1,pdr_ptot-2
      p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-     write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(6), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
+     write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(5), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
      &pdr(p)%rho,pdr(p)%UVfield,pdr(p)%abundance
 #else
      write(21,'(I7,5ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%y, pdr(p)%z, previousgastemperature(pp),dusttemperature(pp),&
@@ -1371,7 +1395,7 @@ open(unit=11,file=out_file,status='replace')
   pp=pdr_ptot
   p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-  write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(6), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
+  write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(5), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
   &pdr(p)%rho,pdr(p)%UVfield,pdr(p)%abundance
 #else
   write(21,'(I7,5ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%y, pdr(p)%z, previousgastemperature(pp),dusttemperature(pp),&
@@ -1380,7 +1404,7 @@ open(unit=11,file=out_file,status='replace')
   pp=pdr_ptot-1
   p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-  write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(6), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
+  write(21,'(I7,4ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(5), previousgastemperature(pp),dusttemperature(pp),pdr(p)%etype,&
   &pdr(p)%rho,pdr(p)%UVfield,pdr(p)%abundance
 #else
   write(21,'(I7,5ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%y, pdr(p)%z, previousgastemperature(pp),dusttemperature(pp),&
@@ -1398,7 +1422,7 @@ if (ion_ptot.gt.0) then
   do pp=1,ion_ptot
      p=IDlist_ion(pp)
 #ifdef PSEUDO_1D
-     write(21,'(I7,3ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(6), previousgastemperature(pp),pdr(p)%etype,&
+     write(21,'(I7,3ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(5), previousgastemperature(pp),pdr(p)%etype,&
      &pdr(p)%rho,pdr(p)%UVfield,pdr(p)%abundance
 #else
      write(21,'(I7,4ES11.3,I5,400ES11.3)') p,pdr(p)%x, pdr(p)%y, pdr(p)%z, previousgastemperature(pp),pdr(p)%etype,&
@@ -1417,7 +1441,7 @@ if (dark_ptot.gt.0) then
   do pp=1,dark_ptot
      p=IDlist_dark(pp)
 #ifdef PSEUDO_1D
-     write(21,'(I7,3ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(6), previousgastemperature(pp),pdr(p)%etype,&
+     write(21,'(I7,3ES11.3,I5,300ES11.3)') p,pdr(p)%x, pdr(p)%AV(5), previousgastemperature(pp),pdr(p)%etype,&
      &pdr(p)%rho,pdr(p)%UVfield,pdr(p)%abundance
 #else
      write(21,'(I7,4ES11.3,I5,400ES11.3)') p,pdr(p)%x, pdr(p)%y, pdr(p)%z, previousgastemperature(pp),pdr(p)%etype,&
@@ -1443,7 +1467,7 @@ close(21)
    do pp=1,pdr_ptot
       p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-      write(13,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%AV(6), CII_cool(pp),CI_cool(pp), & 
+      write(13,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%AV(5), CII_cool(pp),CI_cool(pp), & 
                                &OI_cool(pp),C12O_cool(pp), total_cooling_rate(pp)
 #else
       write(13,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%y, pdr(p)%z, CII_cool(pp), CI_cool(pp),&
@@ -1467,7 +1491,7 @@ close(21)
    do pp=1,pdr_ptot
       p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-      write(14,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%AV(6), all_heating(pp,:)
+      write(14,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%AV(5), all_heating(pp,:)
 #else
       write(14,'(I7,200ES11.3)') p, pdr(p)%x, pdr(p)%y, pdr(p)%z, all_heating(pp,:), pdr(p)%AV(:)
 #endif
@@ -1488,7 +1512,7 @@ close(21)
    do pp=1,pdr_ptot-2
       p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(6), &    !ID,x,AV(6)
+      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(5), &    !ID,x,AV(5)
       &pdr(p)%CII_line(2,1),&                                          !CII line
       &pdr(p)%CI_line(2,1), pdr(p)%CI_line(3,1), pdr(p)%CI_line(3,2),& !CI line
       &pdr(p)%OI_line(2,1), pdr(p)%OI_line(3,1), pdr(p)%OI_line(3,2),& !OI line
@@ -1508,7 +1532,7 @@ close(21)
       pp=pdr_ptot
       p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(6), &    !ID,x,AV(6)
+      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(5), &    !ID,x,AV(6)
       &pdr(p)%CII_line(2,1),&                                          !CII line
       &pdr(p)%CI_line(2,1), pdr(p)%CI_line(3,1), pdr(p)%CI_line(3,2),& !CI line
       &pdr(p)%OI_line(2,1), pdr(p)%OI_line(3,1), pdr(p)%OI_line(3,2),& !OI line
@@ -1527,7 +1551,7 @@ close(21)
       pp=pdr_ptot-1
       p=IDlist_pdr(pp)
 #ifdef PSEUDO_1D
-      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(6), &    !ID,x,AV(6)
+      write(15,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(5), &    !ID,x,AV(6)
       &pdr(p)%CII_line(2,1),&                                          !CII line
       &pdr(p)%CI_line(2,1), pdr(p)%CI_line(3,1), pdr(p)%CI_line(3,2),& !CI line
       &pdr(p)%OI_line(2,1), pdr(p)%OI_line(3,1), pdr(p)%OI_line(3,2),& !OI line
@@ -1558,7 +1582,7 @@ close(21)
 
    do pp=1,pdr_ptot
       p=IDlist_pdr(pp)
-      write(16,'(I9,200ES11.3)') pp, pdr(p)%Av(6), pdr(p)%CII_pop, pdr(p)%CI_pop, pdr(p)%OI_pop, pdr(p)%C12O_pop
+      write(16,'(I9,200ES11.3)') pp, pdr(p)%Av(5), pdr(p)%CII_pop, pdr(p)%CI_pop, pdr(p)%OI_pop, pdr(p)%C12O_pop
    enddo
    close(16)
 !-------------------------------
@@ -1578,13 +1602,13 @@ close(21)
    do pp=1,pdr_ptot
       p=IDlist_pdr(pp)
       !write(16,'(I9,200ES11.3)') pp, pdr(p)%x,&     !ID,x,AV(6)
-      write(16,'(I9,200ES11.3)') pp, pdr(p)%AV(6),&     !ID,x,AV(6) !new line!
-      &pdr(p)%CII_optdepth(2,1,6),&                                          !CII line
-      &pdr(p)%CI_optdepth(2,1,6), pdr(p)%CI_optdepth(3,1,6), pdr(p)%CI_optdepth(3,2,6),& !CI line
-      &pdr(p)%OI_optdepth(2,1,6), pdr(p)%OI_optdepth(3,1,6), pdr(p)%OI_optdepth(3,2,6),& !OI line
-      &pdr(p)%C12O_optdepth(2,1,6), pdr(p)%C12O_optdepth(3,2,6), pdr(p)%C12O_optdepth(4,3,6), pdr(p)%C12O_optdepth(5,4,6), &
-      &pdr(p)%C12O_optdepth(6,5,6), pdr(p)%C12O_optdepth(7,6,6), pdr(p)%C12O_optdepth(8,7,6), pdr(p)%C12O_optdepth(9,8,6), &
-      &pdr(p)%C12O_optdepth(10,9,6), pdr(p)%C12O_optdepth(11,10,6)     !CO line
+      write(16,'(I9,200ES11.3)') pp, pdr(p)%x, pdr(p)%AV(5),&     !ID,x,AV(6) !new line!
+      &pdr(p)%CII_optdepth(2,1,5),&                                          !CII line
+      &pdr(p)%CI_optdepth(2,1,5), pdr(p)%CI_optdepth(3,1,5), pdr(p)%CI_optdepth(3,2,5),& !CI line
+      &pdr(p)%OI_optdepth(2,1,5), pdr(p)%OI_optdepth(3,1,5), pdr(p)%OI_optdepth(3,2,5),& !OI line
+      &pdr(p)%C12O_optdepth(2,1,5), pdr(p)%C12O_optdepth(3,2,5), pdr(p)%C12O_optdepth(4,3,5), pdr(p)%C12O_optdepth(5,4,5), &
+      &pdr(p)%C12O_optdepth(6,5,5), pdr(p)%C12O_optdepth(7,6,5), pdr(p)%C12O_optdepth(8,7,5), pdr(p)%C12O_optdepth(9,8,5), &
+      &pdr(p)%C12O_optdepth(10,9,5), pdr(p)%C12O_optdepth(11,10,5)     !CO line
    enddo
    close(16)
 !-------------------------------
@@ -2025,7 +2049,10 @@ DO II=1,CHEMITERATIONS
  allocate(dummy_rate(1:nreac,1))
 
    p=IDlist_dark(1)
-    CALL CALCULATE_REACTION_RATES(gastemperature(0),dusttemperature(0),nrays,pdr(p)%rad_surface(0:nrays-1),&
+
+   inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+
+    CALL CALCULATE_REACTION_RATES(gastemperature(0),dusttemperature(0),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(0)%columndens_point(0:nrays-1,1:nspec),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)

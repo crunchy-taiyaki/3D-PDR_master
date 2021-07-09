@@ -4,7 +4,7 @@
 !     Calculate the total heating rate at the current grid point.
 !
 !-----------------------------------------------------------------------
-      SUBROUTINE CALC_HEATING(DENSITY,GAS_TEMPERATURE,DUST_TEMPERATURE, &
+      SUBROUTINE CALC_HEATING(inside_outflow,DENSITY,GAS_TEMPERATURE,DUST_TEMPERATURE, &
                  & UV_FIELD,V_TURB,NSPEC,ABUNDANCE,NREAC,RATE,HEATING_RATE,&
                  & NRGR,NRH2,NRHD,NRCO,NRCI,NRSI) 
 
@@ -16,6 +16,7 @@
       IMPLICIT NONE
 
       INTEGER(KIND=I4B), INTENT(IN) :: NSPEC,NREAC
+      logical, intent(IN) :: inside_outflow
       REAL(KIND=DP), INTENT(IN)     :: DENSITY,GAS_TEMPERATURE,DUST_TEMPERATURE,UV_FIELD,V_TURB
       REAL(KIND=DP), INTENT(IN)     :: ABUNDANCE(1:NSPEC),RATE(1:NREAC)
       INTEGER(KIND=I4B), INTENT(IN) :: NRGR,NRH2,NRHD,NRCO,NRCI,NRSI
@@ -213,8 +214,8 @@
 !-----------------------------------------------------------------------
 
       L_TURB=200.0D0!5.0D0 
-      !TURBULENT_HEATING=3.5D-28*((1.0D0/1.0D5)**3)*(1.0D0/L_TURB)*DENSITY
-      TURBULENT_HEATING=3.5D-28*((V_TURB/1.0D5)**3)*(1.0D0/L_TURB)*DENSITY
+      TURBULENT_HEATING=0.0D0
+      !TURBULENT_HEATING=3.5D-28*((V_TURB/1.0D5)**3)*(1.0D0/L_TURB)*DENSITY
 
 !-----------------------------------------------------------------------
 !     Exothermic chemical reaction heating
@@ -283,7 +284,11 @@
 !-----------------------------------------------------------------------
 !
       ACCOMMODATION=0.35D0*EXP(-SQRT((DUST_TEMPERATURE+GAS_TEMPERATURE)/5.0D2))+0.1D0
-      NGRAIN=1.998D-12*DENSITY*METALLICITY*100./g2d
+      if (inside_outflow) then
+         NGRAIN=1.998D-12*DENSITY*METALLICITY*100./g2d_outflow
+      else
+         NGRAIN=1.998D-12*DENSITY*METALLICITY*100./g2d
+      endif
       CGRAIN=PI*GRAIN_RADIUS**2
 
       GASGRAIN_HEATING=4.003D-12*DENSITY*NGRAIN*CGRAIN*ACCOMMODATION*SQRT(GAS_TEMPERATURE) &

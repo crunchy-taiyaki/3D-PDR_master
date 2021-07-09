@@ -13,7 +13,7 @@
 !  treatment of Meijerink & Spaans (2005, A&A, 436, 397).
 !
 !-----------------------------------------------------------------------
-      SUBROUTINE CALCULATE_REACTION_RATES(TEMPERATURE,DUST_TEMPERATURE,NRAYS,RAD_SURFACE, &
+      SUBROUTINE CALCULATE_REACTION_RATES(TEMPERATURE,DUST_TEMPERATURE,inside_outflow,NRAYS,RAD_SURFACE, &
                & AV,COLUMN,NREAC,REACTANT,PRODUCT,ALPHA,BETA,GAMMA,RATE,RTMIN,RTMAX,DUPLICATE,NSPEC, &
                & NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 
@@ -27,6 +27,7 @@
 
       INTEGER(kind=i4b), intent(in) :: NRAYS, NSPEC
       real(kind=dp),intent(in) :: TEMPERATURE, DUST_TEMPERATURE
+      logical, intent(in) :: inside_outflow
       real(kind=dp),intent(in) :: RAD_SURFACE(0:nrays-1),AV(0:nrays-1),COLUMN(0:nrays-1,1:nspec)
       INTEGER(kind=i4b),intent(in) :: NREAC,DUPLICATE(1:nreac)
       real(kind=dp),intent(in) :: ALPHA(1:nreac),BETA(1:nreac),GAMMA(1:nreac),RTMIN(1:nreac),RTMAX(1:nreac)
@@ -77,7 +78,7 @@
           &  (PRODUCT(I,1).EQ."H2 " .AND. &
           &  (PRODUCT(I,2).EQ."   " .OR.  PRODUCT(I,2).EQ."#  "))) THEN
 #ifdef H2FORM
-            RATE(I)=H2_FORMATION_RATE(TEMPERATURE,DUST_TEMPERATURE)
+            RATE(I)=H2_FORMATION_RATE(inside_outflow,TEMPERATURE,DUST_TEMPERATURE)
 #else
 !            RATE(I)=3.0D-18*SQRT(TEMPERATURE)*EXP(-(TEMPERATURE/1.0D3))
             RATE(I)=3.0D-18*SQRT(TEMPERATURE)
