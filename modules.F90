@@ -87,6 +87,7 @@ MODULE maincode_module
   real(kind=dp) :: avmax
 
   character(len=3) :: fieldchoice
+  character(len=1) :: velocity_flag
   real(kind=dp) :: Gext(1)
   real(kind=dp) :: UV_source_coord(1:3)
   real(kind=dp) :: AV_fac, UV_fac
@@ -158,7 +159,7 @@ MODULE maincode_module
   type columndens_node
      real(kind=dp), pointer :: columndens_point(:,:)
   end type columndens_node
-  type(columndens_node), allocatable :: column(:)
+  type(columndens_node), allocatable :: column(:),effective_h2_column(:)
   integer(kind=i4b), allocatable :: DUPLICATE(:)
   
   real(kind=dp),allocatable :: ALPHA(:),BETA(:),GAMMA(:),RATE(:),RTMIN(:),RTMAX(:)

@@ -25,10 +25,9 @@ real(kind=dp)::uvfieldaux
 real(kind=dp),allocatable::prev_cooling(:)
 !reversing rows declaration
 real(kind=dp),allocatable::x_rev(:),y_rev(:),z_rev(:),n_rev(:),vx_rev(:), vy_rev(:), vz_rev(:)
-character(len=1)::velocity_flag
 character(len=4)::mode
 logical :: inside_outflow
-
+real(kind=dp) :: thermal_vel
 
 write(6,*) '=============================================================================='
 write(6,*) '*********     *********             *********     *********      *********'
@@ -488,9 +487,11 @@ level_conv=.false.
 first_time=.true.
 #endif
 allocate(column(0:pdr_ptot))
+allocate(effective_h2_column(0:pdr_ptot))
 write(6,*) 'Calculating column densities...'
 referee=0
 call calc_columndens
+call calc_effective_h2_columndens
 referee=1
 
 start_time = 0.0D0
@@ -522,7 +523,7 @@ DO II=1,CHEMITERATIONS
 
 #ifdef OPENMP
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE (pp,p,rate)&
-!$OMP PRIVATE(NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
+!$OMP PRIVATE(inside_outflow,NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 #endif
   do pp=1,pdr_ptot
     p=IDlist_pdr(pp)
@@ -532,6 +533,7 @@ DO II=1,CHEMITERATIONS
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
+          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
       DUMMY_RATE(:,pp) = rate
@@ -557,6 +559,7 @@ DO II=1,CHEMITERATIONS
 #endif
 
    call calc_columndens
+   call calc_effective_h2_columndens
 
 ENDDO
  deallocate(dummy_abundance)
@@ -651,7 +654,7 @@ DO ITERATION=1,ITERTOT
          write(6,*) 'Chemical iteration ',ii
 #ifdef OPENMP
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE (pp,p,rate)&
-!$OMP PRIVATE(NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
+!$OMP PRIVATE(inside_outflow,NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 #endif
         do pp=1,pdr_ptot
           p=IDlist_pdr(pp)
@@ -661,6 +664,7 @@ DO ITERATION=1,ITERTOT
 
           CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
              &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
+             &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
              &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
              &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
           DUMMY_RATE(:,pp) = rate
@@ -686,6 +690,7 @@ DO ITERATION=1,ITERTOT
 !$OMP END PARALLEL DO
 #endif
        call calc_columndens
+       call calc_effective_h2_columndens
      ENDDO !CHEMICAL ITERATION
  deallocate(dummy_abundance)
  deallocate(dummy_density)
@@ -736,7 +741,8 @@ DO ITERATION=1,ITERTOT
 !$OMP PRIVATE(dummyarray_CII_tau,dummyarray_CI_tau,dummyarray_OI_tau,dummyarray_C12O_tau)&
 !$OMP PRIVATE(dummyarray_CII_beta,dummyarray_CI_beta,dummyarray_OI_beta,dummyarray_C12O_beta) &
 !$OMP PRIVATE(CIIsolution,CIsolution,OIsolution,C12Osolution) &
-!$OMP PRIVATE(CIIevalpop,CIevalpop,OIevalpop,C12Oevalpop)
+!$OMP PRIVATE(CIIevalpop,CIevalpop,OIevalpop,C12Oevalpop) &
+!$OMP PRIVATE(inside_outflow)
 #endif
 
     do pp=1,pdr_ptot
@@ -987,7 +993,8 @@ total_cooling_rate=CII_cool+CI_cool+OI_cool+C12O_cool
 #else
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(p,pp,allheating,rate)&
 #endif
-!$OMP PRIVATE(NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
+!$OMP PRIVATE(NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)&
+!$OMP PRIVATE(inside_outflow)
 #endif
 do pp=1,pdr_ptot
    p=IDlist_pdr(pp)
@@ -1002,6 +1009,7 @@ do pp=1,pdr_ptot
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
+          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
     call calc_heating(inside_outflow,pdr(p)%rho,gastemperature(pp),dusttemperature(pp),pdr(p)%UVfield, &
@@ -1975,12 +1983,95 @@ do pp=1,pdr_ptot
        enddo ! End of loop over species (n)
      enddo ! End of loop over evaluation points along ray (i)
   enddo ! End of j loop over rays (j)
+
 enddo ! End of ii loop over pdrpoints (ii)
 #ifdef OPENMP
 !$OMP END PARALLEL DO
 #endif
 return
 end subroutine calc_columndens
+
+subroutine calc_effective_h2_columndens
+!calculation of column density taking into account velocity field
+
+
+!DARK MOLECULAR ELEMENT -------------------------------------------
+if (dark_ptot.gt.0) then
+  p=IDlist_dark(1)
+  thermal_vel = sqrt(8.0*KB*gastemperature(0)/PI/MP + v_turb**2)/1e5
+  if (referee.eq.0) allocate(effective_h2_column(0)%columndens_point(0:nrays-1,1))
+  effective_h2_column(0)%columndens_point = 0.0D0
+do k=1,nspec
+  if (species(k).eq.'H2') then
+  do j=0,nrays-1
+     if (pdr(p)%epray(j).eq.0) cycle
+     do i=1,pdr(p)%epray(j)!nb_projected_points
+       if (abs(pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ).lt.0.4*thermal_vel ) then
+          adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
+                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
+                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
+
+         effective_h2_column(0)%columndens_point(j,1) = effective_h2_column(0)%columndens_point(j,1) + adaptive_step*PC*&
+             & (pdr(int(pdr(p)%projected(j,i-1)))%rho*pdr(int(pdr(p)%projected(j,i-1)))%abundance(k) +&
+             & pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k))/2.
+      endif
+      enddo ! End of loop over evaluation points along ray (i)
+      if (effective_h2_column(0)%columndens_point(j,1).eq.0.0D0) then
+          effective_h2_column(0)%columndens_point(j,1) = pdr(int(pdr(p)%projected(j,0)))%rho*&
+                                                         &pdr(int(pdr(p)%projected(j,0)))%abundance(k) 
+      endif 
+  enddo ! End of j loop over rays (j)
+  endif
+enddo ! End of k loop over species
+
+endif ! dark_ptot.gt.0
+!-------------------------------------------------------------------------
+
+#ifdef OPENMP
+!$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(pp,p,adaptive_step,j,i,k,thermal_vel)
+#endif
+do pp=1,pdr_ptot
+   p=IDlist_pdr(pp)
+   thermal_vel = sqrt(8.0*KB*gastemperature(pp)/PI/MP + v_turb**2)/1e5
+   pdr(p)%projected(:,0)=p
+#ifdef THERMALBALANCE
+  if (converged(pp)) cycle
+#endif
+  if (referee.eq.0) allocate(effective_h2_column(pp)%columndens_point(0:nrays-1,1))
+  effective_h2_column(pp)%columndens_point = 0.0D0
+
+do k=1,nspec
+  if (species(k).eq.'H2') then
+  do j=0,nrays-1
+     if (pdr(p)%epray(j).eq.0) cycle
+     do i=1,pdr(p)%epray(j)!nb_projected_points
+
+       if (abs(pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ).lt.0.4*thermal_vel ) then
+          adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
+                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
+                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
+
+          effective_h2_column(pp)%columndens_point(j,1) = effective_h2_column(pp)%columndens_point(j,1) +&
+             &adaptive_step*PC*&
+             & (pdr(int(pdr(p)%projected(j,i-1)))%rho*pdr(int(pdr(p)%projected(j,i-1)))%abundance(k) +&
+             & pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k))/2.                                                    
+      endif
+      enddo ! End of loop over evaluation points along ray (i)
+      if (effective_h2_column(pp)%columndens_point(j,1).eq.0.0D0) then
+          effective_h2_column(pp)%columndens_point(j,1) = pdr(int(pdr(p)%projected(j,0)))%rho*&
+                                                          &pdr(int(pdr(p)%projected(j,0)))%abundance(k) 
+      endif 
+  enddo ! End of j loop over rays (j)
+  endif
+enddo ! End of k loop over species
+
+enddo ! End of ii loop over pdrpoints (ii)
+
+#ifdef OPENMP
+!$OMP END PARALLEL DO
+#endif
+return
+end subroutine calc_effective_h2_columndens
 
 
 ! Calculate the partition function for the given species
@@ -2054,6 +2145,7 @@ DO II=1,CHEMITERATIONS
 
     CALL CALCULATE_REACTION_RATES(gastemperature(0),dusttemperature(0),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(0)%columndens_point(0:nrays-1,1:nspec),&
+          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),& 
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
       DUMMY_RATE(:,1) = rate
@@ -2077,6 +2169,7 @@ DO II=1,CHEMITERATIONS
   deallocate(dummy_rate)
 
    call calc_columndens
+   call calc_effective_h2_columndens
 ENDDO
 
 p=IDlist_dark(1)

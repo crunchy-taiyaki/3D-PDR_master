@@ -80,7 +80,8 @@ frac2=1.0D0/sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)
          if (jlevel.ge.ilevel) exit
 
 	 if (mode.eq.'full') then
-         write(6,*) 'full mode is not available' 
+         write(6,*) 'full mode is not available'
+         stop 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!START OF MODE:FULL	 
 	 !init frequency array
 !	 sigma_p=sqrt(8.0*KB*Tguess/PI/MP + v_turb**2)*frequencies(ilevel,jlevel)/C

@@ -14,7 +14,6 @@ logical::killray(0:nrays-1)
 integer::j
 real(kind=dp) :: psi_z, psi_x !angles of rotations for matching UV-source's direction and healpix ray with coordinates (0 1 0)
 real(kind=dp) :: vel_vec(1:3),temp_vec(1:3)
-real(kind=dp) :: test_angle,test_angle2, test_module, test_module2
 
 if (dark_ptot.gt.0) then
 

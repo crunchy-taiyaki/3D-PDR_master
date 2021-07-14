@@ -2,25 +2,25 @@
 3DPDR input parameters file|    ~~~ COMMENTS ~~~
 ===========================|-------------------------
 ./model                    !Input directory (20 char. max.)
-d42_vx.dat                 !Input file (20 char. max.)
-./res/d42_vx_nhi           !Output directory (20 char. max.)
+1Dn30_vx.dat               !Input file (20 char. max.)
+./res/1Dn30_vxs04_nhi_h2   !Output directory (20 char. max.)
                            !Output file (20 char. max)
 0                          !HEALPix level of refinement
 0.8                        !Theta critical (0<phi<pi/2)
 8                          !First set of Chemical Iterations
 6000                       !Total iteration
-0.0                        !min number density (cm^-3)
-1e13                       !max number density (cm^-3)
-3.0E-16                    !Cosmic Rays (s^-1)
+0.9                        !min number density (cm^-3)
+1e12                       !max number density (cm^-3)
+1.0E-16                    !Cosmic Rays (s^-1)
 1.0                        !Turbulent velocity (km/s)
 20.0                       !Dust temperature (K)
 1e7                        !End time (yr)
-1e6                        !Gas-to-dust
-1e6                        !Gas-to-dust outflow
+100                        !Gas-to-dust
+100                        !Gas-to-dust outflow
 100.0                      !Maximal velocity outside of cavity (km/s) 
 1.0                        !Metallicity
 0.42                       !Omega
-1.0E-5                     !Grain radius (m)
+1.0E-7                     !Grain radius (m)
 ===========================|
 Input files for molecules  |*** 20 characters max ***
 ===========================|
@@ -31,7 +31,7 @@ Input files for molecules  |*** 20 characters max ***
 ===========================|
 Thermal balance values     |
 ===========================|
-50.0                       !Initial temperature (used when TEMP_GUESS is OFF) [was equal 10.0]
+30.0                       !Initial temperature (used when TEMP_GUESS is OFF) [was equal 10.0]
 2.7                        !Tlow (used when TEMP_GUESS is OFF)
 8000.0                     !Thigh (used when TEMP_GUESS is OFF)
 2.7                        !Tmin (absolute lower bound) !10.0 
@@ -42,7 +42,7 @@ Thermal balance values     |
 UV field           |
 ===========================| 
 PNT                        !ISO-tropic, UNI-directional, PNT-point source
-2.0e8                      !G0 (in Draine field units) -x to +x in 1D
--0.00048481368             !UV source x-axis coordinate
+10                         !G0 (in Draine field units) -x to +x in 1D
+0.0                        !UV source x-axis coordinate
 0.0                        !UV source y-axis coordinate
 0.0                        !UV source z-axis coordinate

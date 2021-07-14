@@ -14,21 +14,21 @@
 !
 !-----------------------------------------------------------------------
       SUBROUTINE CALCULATE_REACTION_RATES(TEMPERATURE,DUST_TEMPERATURE,inside_outflow,NRAYS,RAD_SURFACE, &
-               & AV,COLUMN,NREAC,REACTANT,PRODUCT,ALPHA,BETA,GAMMA,RATE,RTMIN,RTMAX,DUPLICATE,NSPEC, &
+               & AV,COLUMN,EFF_H2COLUMN,NREAC,REACTANT,PRODUCT,ALPHA,BETA,GAMMA,RATE,RTMIN,RTMAX,DUPLICATE,NSPEC, &
                & NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 
  use definitions
  use healpix_types
  use global_module
  use functions_module
- use maincode_module , only : zeta, AV_fac
+ use maincode_module , only : zeta, AV_fac, velocity_flag
 
       IMPLICIT NONE
 
       INTEGER(kind=i4b), intent(in) :: NRAYS, NSPEC
       real(kind=dp),intent(in) :: TEMPERATURE, DUST_TEMPERATURE
       logical, intent(in) :: inside_outflow
-      real(kind=dp),intent(in) :: RAD_SURFACE(0:nrays-1),AV(0:nrays-1),COLUMN(0:nrays-1,1:nspec)
+      real(kind=dp),intent(in) :: RAD_SURFACE(0:nrays-1),AV(0:nrays-1),COLUMN(0:nrays-1,1:nspec),EFF_H2COLUMN(0:nrays-1,1)
       INTEGER(kind=i4b),intent(in) :: NREAC,DUPLICATE(1:nreac)
       real(kind=dp),intent(in) :: ALPHA(1:nreac),BETA(1:nreac),GAMMA(1:nreac),RTMIN(1:nreac),RTMAX(1:nreac)
       real(kind=dp), intent(out) :: rate(1:nreac)
@@ -154,9 +154,20 @@
 !C     is calculated separately by the function H2PDRATE (within shield.f)
  1       IF(REACTANT(I,1).EQ."H2 " .AND. REACTANT(I,3).EQ."   ") THEN
 !C           Loop over all rays
-            DO K=0,NRAYS-1
+            IF (velocity_flag.eq.'y') THEN
+           
+              DO K=0,NRAYS-1
+              !if (k.eq.5) then
+              !write(6,*)K,EFF_H2COLUMN(K,1),COLUMN(K,NH2)
+              !endif
+               RATE(I)=RATE(I) + H2PDRATE(ALPHA(I),RAD_SURFACE(K),AV(K),EFF_H2COLUMN(K,1))
+              ENDDO
+            ELSE
+              DO K=0,NRAYS-1
                RATE(I)=RATE(I) + H2PDRATE(ALPHA(I),RAD_SURFACE(K),AV(K),COLUMN(K,NH2))
-            ENDDO
+              ENDDO
+            ENDIF
+            
             IF(PRODUCT(I,1).EQ."H " .AND. PRODUCT(I,2).EQ."H ") NRH2=I
             GOTO 10
          ENDIF
