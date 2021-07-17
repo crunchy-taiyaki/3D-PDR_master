@@ -28,6 +28,7 @@ real(kind=dp),allocatable::x_rev(:),y_rev(:),z_rev(:),n_rev(:),vx_rev(:), vy_rev
 character(len=4)::mode
 logical :: inside_outflow
 real(kind=dp) :: thermal_vel
+real(kind=dp) :: total_h2_dens,vel_weight,temp_sum,mean_weighted_vel
 
 write(6,*) '=============================================================================='
 write(6,*) '*********     *********             *********     *********      *********'
@@ -487,11 +488,11 @@ level_conv=.false.
 first_time=.true.
 #endif
 allocate(column(0:pdr_ptot))
-allocate(effective_h2_column(0:pdr_ptot))
+allocate(vel_dispersion(0:pdr_ptot))
 write(6,*) 'Calculating column densities...'
 referee=0
 call calc_columndens
-call calc_effective_h2_columndens
+call calc_velocity_dispersion
 referee=1
 
 start_time = 0.0D0
@@ -533,7 +534,7 @@ DO II=1,CHEMITERATIONS
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
-          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
+          &vel_dispersion(pp)%ray(0:nrays-1),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
       DUMMY_RATE(:,pp) = rate
@@ -541,6 +542,7 @@ DO II=1,CHEMITERATIONS
       DUMMY_DENSITY(pp) = pdr(p)%rho
       DUMMY_TEMPERATURE(pp) = gastemperature(pp)
    enddo
+
 #ifdef OPENMP
 !$OMP END PARALLEL DO
 #endif
@@ -559,13 +561,12 @@ DO II=1,CHEMITERATIONS
 #endif
 
    call calc_columndens
-   call calc_effective_h2_columndens
+   call calc_velocity_dispersion
 
 ENDDO
  deallocate(dummy_abundance)
  deallocate(dummy_density)
  deallocate(dummy_temperature)
-
 
 
 #ifdef OPENMP
@@ -664,7 +665,7 @@ DO ITERATION=1,ITERTOT
 
           CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
              &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
-             &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
+             &vel_dispersion(pp)%ray(0:nrays-1),&
              &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
              &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
           DUMMY_RATE(:,pp) = rate
@@ -690,7 +691,7 @@ DO ITERATION=1,ITERTOT
 !$OMP END PARALLEL DO
 #endif
        call calc_columndens
-       call calc_effective_h2_columndens
+       call calc_velocity_dispersion
      ENDDO !CHEMICAL ITERATION
  deallocate(dummy_abundance)
  deallocate(dummy_density)
@@ -996,6 +997,7 @@ total_cooling_rate=CII_cool+CI_cool+OI_cool+C12O_cool
 !$OMP PRIVATE(NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)&
 !$OMP PRIVATE(inside_outflow)
 #endif
+
 do pp=1,pdr_ptot
    p=IDlist_pdr(pp)
 #ifdef THERMALBALANCE
@@ -1009,7 +1011,7 @@ do pp=1,pdr_ptot
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
-          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),&
+          &vel_dispersion(pp)%ray(0:nrays-1),&
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
     call calc_heating(inside_outflow,pdr(p)%rho,gastemperature(pp),dusttemperature(pp),pdr(p)%UVfield, &
@@ -1354,6 +1356,19 @@ open(unit=10,file=out_file,status='replace')
        write(10,*) p,pdr(p)%x, pdr(p)%AV(5),lines_escape_probability(:,pp)
     enddo
  close(10)
+
+!-------------------------------------
+!OUTPUT FOR VEL_DISPERSION
+!-------------------------------------
+out_file = trim(adjustl(directory))//'/'//"vel_disp"
+out_file2 = trim(adjustl(out_file))//"]"
+write(6,'(" Writing file [",A)') out_file2
+open(unit=9,file=out_file,status='replace') 
+    do pp=1,pdr_ptot
+    p=IDlist_pdr(pp)
+       write(9,*) p,pdr(p)%x, pdr(p)%AV(5),vel_dispersion(pp)%ray(5)
+    enddo
+ close(9)
 
 !-------------------------------------
 !OUTPUT FOR TAU
@@ -1995,38 +2010,6 @@ subroutine calc_effective_h2_columndens
 !calculation of column density taking into account velocity field
 
 
-!DARK MOLECULAR ELEMENT -------------------------------------------
-if (dark_ptot.gt.0) then
-  p=IDlist_dark(1)
-  thermal_vel = sqrt(8.0*KB*gastemperature(0)/PI/MP + v_turb**2)/1e5
-  if (referee.eq.0) allocate(effective_h2_column(0)%columndens_point(0:nrays-1,1))
-  effective_h2_column(0)%columndens_point = 0.0D0
-do k=1,nspec
-  if (species(k).eq.'H2') then
-  do j=0,nrays-1
-     if (pdr(p)%epray(j).eq.0) cycle
-     do i=1,pdr(p)%epray(j)!nb_projected_points
-       if (abs(pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ).lt.0.4*thermal_vel ) then
-          adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
-                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
-                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
-
-         effective_h2_column(0)%columndens_point(j,1) = effective_h2_column(0)%columndens_point(j,1) + adaptive_step*PC*&
-             & (pdr(int(pdr(p)%projected(j,i-1)))%rho*pdr(int(pdr(p)%projected(j,i-1)))%abundance(k) +&
-             & pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k))/2.
-      endif
-      enddo ! End of loop over evaluation points along ray (i)
-      if (effective_h2_column(0)%columndens_point(j,1).eq.0.0D0) then
-          effective_h2_column(0)%columndens_point(j,1) = pdr(int(pdr(p)%projected(j,0)))%rho*&
-                                                         &pdr(int(pdr(p)%projected(j,0)))%abundance(k) 
-      endif 
-  enddo ! End of j loop over rays (j)
-  endif
-enddo ! End of k loop over species
-
-endif ! dark_ptot.gt.0
-!-------------------------------------------------------------------------
-
 #ifdef OPENMP
 !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(pp,p,adaptive_step,j,i,k,thermal_vel)
 #endif
@@ -2046,7 +2029,7 @@ do k=1,nspec
      if (pdr(p)%epray(j).eq.0) cycle
      do i=1,pdr(p)%epray(j)!nb_projected_points
 
-       if (abs(pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ).lt.0.4*thermal_vel ) then
+       if (abs(pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ).lt.1.694*thermal_vel ) then
           adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
                   &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
                   &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
@@ -2072,6 +2055,69 @@ enddo ! End of ii loop over pdrpoints (ii)
 #endif
 return
 end subroutine calc_effective_h2_columndens
+
+subroutine calc_velocity_dispersion
+!calculation of column density taking into account velocity field
+
+
+
+#ifdef OPENMP
+!$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(pp,p,adaptive_step,j,i,k,total_h2_dens,vel_weight,temp_sum,mean_weighted_vel)
+#endif
+do pp=1,pdr_ptot
+   p=IDlist_pdr(pp)
+   pdr(p)%projected(:,0)=p
+#ifdef THERMALBALANCE
+  if (converged(pp)) cycle
+#endif
+  if (referee.eq.0) allocate(vel_dispersion(pp)%ray(0:nrays-1))
+  vel_dispersion(pp)%ray = 0.0D0
+
+do k=1,nspec
+  if (species(k).eq.'H2') then
+  do j=0,nrays-1
+     if (pdr(p)%epray(j).eq.0) cycle
+
+     total_h2_dens = 0.0D0
+     do i=1,pdr(p)%epray(j)!nb_projected_points
+        adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
+                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
+                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
+        total_h2_dens = total_h2_dens + &
+                        adaptive_step*PC*pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k)
+     enddo ! End of loop over evaluation points along ray (i)
+
+     temp_sum = 0.0D0
+     do i=1,pdr(p)%epray(j)
+        adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
+                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
+                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
+        vel_weight = adaptive_step*PC*pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k)
+        temp_sum = temp_sum + (pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0))*vel_weight
+     enddo
+     mean_weighted_vel = temp_sum/total_h2_dens
+
+     temp_sum = 0.0D0
+     do i=1,pdr(p)%epray(j)
+        adaptive_step = sqrt((pdr(p)%epoint(1,j,i-1)-pdr(p)%epoint(1,j,i))**2+&
+                  &(pdr(p)%epoint(2,j,i-1)-pdr(p)%epoint(2,j,i))**2 + &
+                  &(pdr(p)%epoint(3,j,i-1)-pdr(p)%epoint(3,j,i))**2)
+        vel_weight = adaptive_step*PC*pdr(int(pdr(p)%projected(j,i)))%rho*pdr(int(pdr(p)%projected(j,i)))%abundance(k)
+        temp_sum = temp_sum + vel_weight*((pdr(p)%velocity(j,i)-pdr(p)%velocity(j,0) ) - mean_weighted_vel)**2
+     enddo
+     vel_dispersion(pp)%ray(j) = sqrt(temp_sum/total_h2_dens )
+
+  enddo ! End of j loop over rays (j)
+  endif
+enddo ! End of k loop over species
+
+enddo ! End of ii loop over pdrpoints (ii)
+
+#ifdef OPENMP
+!$OMP END PARALLEL DO
+#endif
+return
+end subroutine calc_velocity_dispersion
 
 
 ! Calculate the partition function for the given species
@@ -2144,8 +2190,7 @@ DO II=1,CHEMITERATIONS
    inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
 
     CALL CALCULATE_REACTION_RATES(gastemperature(0),dusttemperature(0),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
-          &pdr(p)%AV(0:nrays-1),column(0)%columndens_point(0:nrays-1,1:nspec),&
-          &effective_h2_column(pp)%columndens_point(0:nrays-1,1),& 
+          &pdr(p)%AV(0:nrays-1),column(0)%columndens_point(0:nrays-1,1:nspec),& 
           &nreac, reactant, product, alpha, beta, gamma, rate, rtmin, rtmax, duplicate, nspec,&
           &NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
       DUMMY_RATE(:,1) = rate
@@ -2169,7 +2214,7 @@ DO II=1,CHEMITERATIONS
   deallocate(dummy_rate)
 
    call calc_columndens
-   call calc_effective_h2_columndens
+   call calc_velocity_dispersion
 ENDDO
 
 p=IDlist_dark(1)

@@ -53,6 +53,37 @@
 
       RETURN
       END
+
+      FUNCTION H2PDRATE_NEW(K0,G0,AV,NH2,VEL_DISPERSION)
+!      IMPLICIT NONE
+!      real(kind=dp) :: K0,G0,AV,NH2
+!      real(kind=dp) :: LAMBDA,SCATTER
+!!C      DOUBLE PRECISION DOPW,RADW
+!!C      DOUBLE PRECISION H2SHIELD1
+!      real(kind=dp) :: H2SHIELD2
+     use definitions
+     use healpix_types
+     use maincode_module, only : v_turb
+!     use global_module, only : nh2
+    implicit none
+     real(kind=dp) :: H2PDRATE_NEW
+     real(kind=dp), intent(in) :: k0, g0, av
+!     integer(kind=i4b), intent(in) :: nh2
+     real(kind=dp), intent(in) :: nh2
+     real(kind=dp), intent(in) :: vel_dispersion
+     real(kind=dp) :: lambda, scatter!, h2shield2
+     real(kind=dp) :: dopw, radw, h2shield1
+
+      LAMBDA=1000.0D0
+      DOPW = sqrt(v_turb**2 + (vel_dispersion**2)*1e10 )/(LAMBDA*1.0D-8)
+      RADW=8.0D7
+
+!     Calculate the H2 photodissociation rate (H2PDRATE)
+      H2PDRATE_NEW=K0*G0*H2SHIELD1(NH2,DOPW,RADW)*SCATTER(AV,LAMBDA)/2.0
+!      H2PDRATE=K0*G0*H2SHIELD2(NH2)*SCATTER(AV,LAMBDA)/2.0
+
+      RETURN
+      END
 !C=======================================================================
 
 !C=======================================================================

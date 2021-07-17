@@ -14,7 +14,7 @@
 !
 !-----------------------------------------------------------------------
       SUBROUTINE CALCULATE_REACTION_RATES(TEMPERATURE,DUST_TEMPERATURE,inside_outflow,NRAYS,RAD_SURFACE, &
-               & AV,COLUMN,EFF_H2COLUMN,NREAC,REACTANT,PRODUCT,ALPHA,BETA,GAMMA,RATE,RTMIN,RTMAX,DUPLICATE,NSPEC, &
+               & AV,COLUMN,VEL_DISPERSION,NREAC,REACTANT,PRODUCT,ALPHA,BETA,GAMMA,RATE,RTMIN,RTMAX,DUPLICATE,NSPEC, &
                & NRGR,NRH2,NRHD,NRCO,NRCI,NRSI)
 
  use definitions
@@ -28,7 +28,8 @@
       INTEGER(kind=i4b), intent(in) :: NRAYS, NSPEC
       real(kind=dp),intent(in) :: TEMPERATURE, DUST_TEMPERATURE
       logical, intent(in) :: inside_outflow
-      real(kind=dp),intent(in) :: RAD_SURFACE(0:nrays-1),AV(0:nrays-1),COLUMN(0:nrays-1,1:nspec),EFF_H2COLUMN(0:nrays-1,1)
+      real(kind=dp),intent(in) :: RAD_SURFACE(0:nrays-1),AV(0:nrays-1),COLUMN(0:nrays-1,1:nspec)
+      real(kind=dp),intent(in) :: VEL_DISPERSION(0:nrays-1)
       INTEGER(kind=i4b),intent(in) :: NREAC,DUPLICATE(1:nreac)
       real(kind=dp),intent(in) :: ALPHA(1:nreac),BETA(1:nreac),GAMMA(1:nreac),RTMIN(1:nreac),RTMAX(1:nreac)
       real(kind=dp), intent(out) :: rate(1:nreac)
@@ -157,10 +158,7 @@
             IF (velocity_flag.eq.'y') THEN
            
               DO K=0,NRAYS-1
-              !if (k.eq.5) then
-              !write(6,*)K,EFF_H2COLUMN(K,1),COLUMN(K,NH2)
-              !endif
-               RATE(I)=RATE(I) + H2PDRATE(ALPHA(I),RAD_SURFACE(K),AV(K),EFF_H2COLUMN(K,1))
+               RATE(I)=RATE(I) + H2PDRATE_NEW(ALPHA(I),RAD_SURFACE(K),AV(K),COLUMN(K,NH2),VEL_DISPERSION(K))
               ENDDO
             ELSE
               DO K=0,NRAYS-1

@@ -3,7 +3,7 @@
 ===========================|-------------------------
 ./model                    !Input directory (20 char. max.)
 1Dn30_vx.dat               !Input file (20 char. max.)
-./res/1Dn30_vxs04_nhi_h2   !Output directory (20 char. max.)
+./res/1Dn30_vx_nh_h2_dispr !Output directory (20 char. max.)
                            !Output file (20 char. max)
 0                          !HEALPix level of refinement
 0.8                        !Theta critical (0<phi<pi/2)

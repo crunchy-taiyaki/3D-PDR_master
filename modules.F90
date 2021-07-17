@@ -159,7 +159,11 @@ MODULE maincode_module
   type columndens_node
      real(kind=dp), pointer :: columndens_point(:,:)
   end type columndens_node
+  type velocity_dispersion_node
+     real(kind=dp), pointer :: ray(:)
+  end type velocity_dispersion_node
   type(columndens_node), allocatable :: column(:),effective_h2_column(:)
+  type(velocity_dispersion_node), allocatable :: vel_dispersion(:)
   integer(kind=i4b), allocatable :: DUPLICATE(:)
   
   real(kind=dp),allocatable :: ALPHA(:),BETA(:),GAMMA(:),RATE(:),RTMIN(:),RTMAX(:)
@@ -427,6 +431,16 @@ module functions_module
      real(kind=dp), intent(in) :: nh2
      real(kind=dp) :: lambda, scatter, h2shield2
    end function H2PDRATE
+
+   function H2PDRATE_NEW(K0,G0,AV,NH2,VEL_DISPERSION)
+     use definitions
+     use healpix_types
+     real(kind=dp) :: H2PDRATE_NEW
+     real(kind=dp), intent(in) :: k0, g0, av
+     real(kind=dp), intent(in) :: nh2
+     real(kind=dp), intent(in) :: vel_dispersion
+     real(kind=dp) :: lambda, scatter, h2shield2
+   end function H2PDRATE_NEW
 
    function COPDRATE(K0,G0,AV,NCO,NH2)
      use definitions
