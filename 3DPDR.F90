@@ -96,6 +96,7 @@ write(6,*) 'Chemiterations:           ',chemiterations
 write(6,*) 'Zeta:                     ',zeta*1.3d-17
 write(6,*) 'Gas-to-dust               ',g2d
 write(6,*) 'Gas-to-dust inside outflow',g2d_outflow
+write(6,*) 'outflow openning angle    ',outflow_angle
 write(6,*) 'maximal vel outside of cavity',max_velocity
 write(6,*) 'Metallicity               ',metallicity
 write(6,*) 'Omega                     ',omega
@@ -530,7 +531,9 @@ DO II=1,CHEMITERATIONS
     p=IDlist_pdr(pp)
 !    if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
 
-    inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+    inside_outflow = (sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity )&
+                     &.OR.(acos(pdr(p)%x/sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) ) < outflow_angle*PI/180.0D0)&
+                     &.OR.(sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) .EQ. 0.0D0 )
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
@@ -661,7 +664,9 @@ DO ITERATION=1,ITERTOT
           p=IDlist_pdr(pp)
 !          if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
 
-          inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+    inside_outflow = (sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity )&
+                     &.OR.(acos(pdr(p)%x/sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) ) < outflow_angle*PI/180.0D0)&
+                     &.OR.(sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) .EQ. 0.0D0 )
 
           CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
              &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
@@ -811,7 +816,9 @@ CIIevalpop=0.0D0; CIevalpop=0.0D0; OIevalpop=0.0D0; C12Oevalpop=0.0D0
           enddo !pdr(p)%epray(j)
        enddo
    
-inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+    inside_outflow = (sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity )&
+                     &.OR.(acos(pdr(p)%x/sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) ) < outflow_angle*PI/180.0D0)&
+                     &.OR.(sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) .EQ. 0.0D0 )
 
        ! Use the LVG (escape probability) method to determine the transition matrices and solve for the level populations
 ! CII calculations -------------------------------------------------
@@ -1007,7 +1014,9 @@ do pp=1,pdr_ptot
 !   if (allocated(rate)) deallocate(rate); allocate(rate(1:nreac))
    if (allocated(allheating)) deallocate(allheating); allocate(allheating(1:12))
 
-   inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+    inside_outflow = (sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity )&
+                     &.OR.(acos(pdr(p)%x/sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) ) < outflow_angle*PI/180.0D0)&
+                     &.OR.(sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) .EQ. 0.0D0 ) 
 
     CALL CALCULATE_REACTION_RATES(gastemperature(pp),dusttemperature(pp),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(pp)%columndens_point(0:nrays-1,1:nspec),&
@@ -2187,7 +2196,9 @@ DO II=1,CHEMITERATIONS
 
    p=IDlist_dark(1)
 
-   inside_outflow = sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity
+    inside_outflow = (sqrt(pdr(p)%vx**2 + pdr(p)%vy**2 + pdr(p)%vz**2) > max_velocity )&
+                     &.OR.(acos(pdr(p)%x/sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) ) < outflow_angle*PI/180.0D0)&
+                     &.OR.(sqrt(pdr(p)%x**2 + pdr(p)%y**2 + pdr(p)%z**2) .EQ. 0.0D0 )
 
     CALL CALCULATE_REACTION_RATES(gastemperature(0),dusttemperature(0),inside_outflow,nrays,pdr(p)%rad_surface(0:nrays-1),&
           &pdr(p)%AV(0:nrays-1),column(0)%columndens_point(0:nrays-1,1:nspec),& 

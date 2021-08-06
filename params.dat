@@ -2,8 +2,8 @@
 3DPDR input parameters file|    ~~~ COMMENTS ~~~
 ===========================|-------------------------
 ./model                    !Input directory (20 char. max.)
-1Dn30_vx.dat               !Input file (20 char. max.)
-./res/1Dn30_vx_nh_h2_dispr !Output directory (20 char. max.)
+sphere.dat                 !Input file (20 char. max.)
+./res/sphere_000           !Output directory (20 char. max.)
                            !Output file (20 char. max)
 0                          !HEALPix level of refinement
 0.8                        !Theta critical (0<phi<pi/2)
@@ -16,7 +16,8 @@
 20.0                       !Dust temperature (K)
 1e7                        !End time (yr)
 100                        !Gas-to-dust
-100                        !Gas-to-dust outflow
+1.0e6                      !Gas-to-dust outflow
+30.0                       !Outflow openning angle
 100.0                      !Maximal velocity outside of cavity (km/s) 
 1.0                        !Metallicity
 0.42                       !Omega
@@ -42,7 +43,7 @@ Thermal balance values     |
 UV field           |
 ===========================| 
 PNT                        !ISO-tropic, UNI-directional, PNT-point source
-10                         !G0 (in Draine field units) -x to +x in 1D
+1.0e5                      !G0 (in Draine field units) -x to +x in 1D
 0.0                        !UV source x-axis coordinate
 0.0                        !UV source y-axis coordinate
 0.0                        !UV source z-axis coordinate

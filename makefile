@@ -11,7 +11,7 @@ LIBS	          = -lsundials_cvode -lsundials_nvecserial -lm
 OPTIMISE          = 0
 OPENMP            = 1
 #main code
-DIMENSIONS        = 1
+DIMENSIONS        = 3
 NETWORK		  = REDUCED
 DUST              = 2
 GUESS_TEMP        = 1

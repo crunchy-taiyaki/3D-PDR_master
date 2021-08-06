@@ -404,6 +404,7 @@ module global_module
 ! REAL(kind=dp), save :: ZETA=3.85D0,OMEGA=0.42D0,GRAIN_RADIUS=1.0D-5,METALLICITY=1.0D0
  REAL(kind=dp) :: g2d
  REAL(kind=dp) :: g2d_outflow
+ REAL(kind=dp) :: outflow_angle
  REAL(kind=dp) :: max_velocity
  REAL(kind=dp) :: metallicity
  REAL(kind=dp) :: omega
